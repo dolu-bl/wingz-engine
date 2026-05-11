@@ -1,6 +1,9 @@
 add_library(wingz STATIC
     wingz/app.cpp
     wingz/window.cpp
+    wingz/gfx/shader.cpp
+    wingz/gfx/camera.cpp
+    wingz/gfx/sprite_batch.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/glad/src/glad.c
 )
 
