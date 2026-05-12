@@ -19,6 +19,7 @@
 #include <wingz/gfx/texture.h>
 #include <wingz/input/action_map.h>
 #include <wingz/input/input_manager.h>
+#include <wingz/net/client_interpolation.h>
 #include <wingz/net/host.h>
 #include <wingz/net/replication.h>
 #include <wingz/net/serializer.h>
@@ -74,6 +75,7 @@ protected:
             m_host = wingz::net::Host::createClient();
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
             m_host->connect("127.0.0.1", 7777);
+            m_interpolation = std::make_unique<wingz::net::ClientInterpolation>();
             spdlog::info("Режим клиента");
         }
     }
@@ -133,21 +135,56 @@ protected:
             }
             else if (m_connected)
             {
+                // Отправляем инпут каждый второй кадр, используя локальный тик
                 if (m_networkTick % 2 == 0)
                     sendInputToServer(moveX, moveY);
             }
         }
 
+        // ────────────────────────────────────────────
+        // Обновление интерполяции (только клиент)
+        // Используем последний серверный тик, а не локальный
+        // ────────────────────────────────────────────
+        if (m_interpolation && m_connected && m_lastServerTick > 0)
+        {
+            // Рендерим с отставанием на 2 тика ОТ ПОСЛЕДНЕГО СЕРВЕРНОГО ТИКА
+            m_interpolation->update(m_lastServerTick, dt, 1.0f / 30.0f);
+
+            // Копируем интерполированные позиции в ecs для рендера
+            auto view = m_scene->registry().view<wingz::ecs::Transform, wingz::net::Networked>();
+            for (auto entity : view)
+            {
+                const auto& net = view.get<wingz::net::Networked>(entity);
+                const auto* istate = m_interpolation->getState(net.netId);
+
+                if (istate)
+                {
+                    auto& itransform = m_scene->registry().get_or_emplace<wingz::ecs::InterpolatedTransform>(entity);
+                    itransform.x = istate->x;
+                    itransform.y = istate->y;
+                    itransform.rot = istate->rot;
+                }
+            }
+        }
+
+        // ────────────────────────────────────────────
+        // Рендер
+        // ────────────────────────────────────────────
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         m_scene->render(*m_spriteBatch);
 
+        // ────────────────────────────────────────────
+        // Отладочный UI
+        // ────────────────────────────────────────────
         m_debugUI->beginFrame();
         ImGui::Begin("Network");
         ImGui::Text("FPS: %.1f", 1.0f / dt);
         ImGui::Text("Mode: %s", m_isServer ? "Server" : "Client");
         ImGui::Text("Connected: %s", m_connected ? "yes" : "no");
-        ImGui::Text("Tick: %u", m_networkTick);
+        ImGui::Text("Local tick: %u", m_networkTick);
+        ImGui::Text("Server tick: %u", m_lastServerTick);
+        ImGui::Text("Interp lag: %d ticks", static_cast<int32_t>(m_lastServerTick) - static_cast<int32_t>(m_networkTick));
 
         auto view = m_scene->registry().view<wingz::ecs::Transform, wingz::ecs::Tag, wingz::ecs::Player>();
         for (auto e : view)
@@ -155,7 +192,17 @@ protected:
             auto& t = view.get<wingz::ecs::Transform>(e);
             auto& tag = view.get<wingz::ecs::Tag>(e);
             auto& p = view.get<wingz::ecs::Player>(e);
-            ImGui::Text("  %s (pid=%u): (%.0f, %.0f)", tag.name.c_str(), p.id, t.x, t.y);
+
+            float interpX = t.x;
+            float interpY = t.y;
+            const auto* it = m_scene->registry().try_get<wingz::ecs::InterpolatedTransform>(e);
+            if (it)
+            {
+                interpX = it->x;
+                interpY = it->y;
+            }
+
+            ImGui::Text("  %s (pid=%u): raw(%.0f, %.0f) interp(%.0f, %.0f)", tag.name.c_str(), p.id, t.x, t.y, interpX, interpY);
         }
         ImGui::End();
         m_debugUI->endFrame();
@@ -273,7 +320,6 @@ private:
             break;
         case wingz::net::NetEvent::Type::Data:
         {
-            // Проверяем тип сообщения ПОСЛЕ того, как убедились, что это Data
             if (e.message.header.type == wingz::net::MessageType::InputState)
             {
                 if (m_isServer)
@@ -303,7 +349,19 @@ private:
             {
                 if (!m_isServer && m_replication)
                 {
+                    // Сохраняем последний серверный тик ДО интерполяции
+                    m_lastServerTick = e.message.header.tick;
+
+                    // Передаём снапшот в интерполятор
+                    if (m_interpolation)
+                    {
+                        auto states = m_replication->deserializeWorldState(e.message);
+                        m_interpolation->pushSnapshot(e.message.header.tick, states);
+                    }
+
+                    // Применяем состояние напрямую к ecs (для коллизий и физики клиента)
                     m_replication->clientReceive(m_scene->registry(), e.message);
+
                     if (m_localPlayerEntity == entt::null)
                     {
                         auto v = m_scene->registry().view<wingz::ecs::Player>();
@@ -332,6 +390,7 @@ private:
     wingz::net::PeerId m_clientPlayerId = 0xFFFFFFFF;
     entt::entity m_localPlayerEntity = entt::null;
     wingz::net::TickNumber m_networkTick = 0;
+    wingz::net::TickNumber m_lastServerTick = 0; // последний тик, пришедший от сервера
 
     std::unique_ptr<wingz::gfx::SpriteBatch> m_spriteBatch;
     std::unique_ptr<wingz::gfx::DebugUI> m_debugUI;
@@ -339,6 +398,7 @@ private:
     std::unique_ptr<wingz::Scene> m_scene;
     std::unique_ptr<wingz::net::Host> m_host;
     std::unique_ptr<wingz::net::ReplicationSystem> m_replication;
+    std::unique_ptr<wingz::net::ClientInterpolation> m_interpolation;
 };
 
 int main(int argc, char* argv[])

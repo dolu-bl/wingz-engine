@@ -53,4 +53,12 @@ struct InputIntent
     bool fire = false;
 };
 
+/// Интерполированная позиция для рендера (заполняется клиентом).
+struct InterpolatedTransform
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float rot = 0.0f;
+};
+
 } // namespace wingz::ecs
