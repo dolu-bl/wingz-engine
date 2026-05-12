@@ -23,6 +23,7 @@ add_library(wingz STATIC
     wingz/net/connection.cpp
     wingz/net/host.cpp
     wingz/net/replication.cpp
+    wingz/net/serializer.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/glad/src/glad.c
     ${IMGUI_SOURCES}
 )
