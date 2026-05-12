@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 
 #include <wingz/net/types.h>

@@ -12,10 +12,9 @@ namespace gfx
 class SpriteBatch;
 class Camera;
 }
-namespace input
+namespace ecs
 {
-class InputManager;
-class ActionMap;
+class ParticleSystem;
 }
 
 /// Контейнер для ECS-мира и систем.
@@ -34,6 +33,10 @@ public:
 
     /// Обновление логики.
     void update(float dt);
+
+    /// Обновление только визуальных систем (частицы).
+    /// Вызывается на клиенте каждый кадр.
+    void updateVisuals(float dt);
 
     /// Отрисовка.
     void render(gfx::SpriteBatch& batch);
