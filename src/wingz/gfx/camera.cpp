@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "camera.h"
+#include "wingz/gfx/camera.h"
 
 namespace wingz::gfx
 {

@@ -9,6 +9,7 @@ set(IMGUI_SOURCES
 
 add_library(wingz STATIC
     wingz/app.cpp
+    wingz/scene.cpp
     wingz/window.cpp
     wingz/gfx/shader.cpp
     wingz/gfx/camera.cpp
@@ -16,18 +17,21 @@ add_library(wingz STATIC
     wingz/gfx/texture.cpp
     wingz/gfx/texture_atlas.cpp
     wingz/gfx/debug_ui.cpp
+    wingz/input/input_manager.cpp
+    wingz/input/action_map.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/glad/src/glad.c
     ${IMGUI_SOURCES}
 )
 
 target_include_directories(wingz
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/thirdparty/glad/include
         ${CMAKE_SOURCE_DIR}/thirdparty/imgui
         ${CMAKE_SOURCE_DIR}/thirdparty/imgui/backends
         ${CMAKE_SOURCE_DIR}/thirdparty/stb
     PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/wingz
 )
 

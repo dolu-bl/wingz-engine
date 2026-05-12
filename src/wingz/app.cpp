@@ -3,8 +3,8 @@
 
 #include <spdlog/spdlog.h>
 
-#include "app.h"
-#include "window.h"
+#include "wingz/app.h"
+#include "wingz/window.h"
 
 namespace wingz
 {

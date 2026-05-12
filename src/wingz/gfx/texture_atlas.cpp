@@ -3,8 +3,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "texture_atlas.h"
-#include "texture.h"
+#include "wingz/gfx/texture_atlas.h"
+#include "wingz/gfx/texture.h"
 
 namespace wingz::gfx
 {

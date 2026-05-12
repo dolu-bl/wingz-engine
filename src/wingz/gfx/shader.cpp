@@ -5,7 +5,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include "shader.h"
+#include "wingz/gfx/shader.h"
 
 namespace wingz::gfx
 {
