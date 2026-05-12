@@ -1,12 +1,14 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <unordered_map>
 
 #include <glad/glad.h>
 
-#include "sprite_batch.h"
 #include "camera.h"
 #include "shader.h"
+#include "sprite_batch.h"
 
 namespace wingz::gfx
 {
@@ -70,9 +72,14 @@ struct SpriteBatch::Impl
         float r, g, b, a;
     };
 
-    std::vector<Vertex> vertices;
-    size_t spriteCount = 0;
+    // Группируем спрайты по текстуре
+    struct SpriteGroup
+    {
+        uint32_t textureId;
+        std::vector<Vertex> vertices;
+    };
 
+    std::vector<SpriteDesc> sprites;
     Camera currentCamera;
 
     void initWhiteTexture()
@@ -119,7 +126,7 @@ SpriteBatch::SpriteBatch()
     m_impl->initWhiteTexture();
 
     // Предварительно аллоцируем память
-    m_impl->vertices.reserve(Impl::kMaxSprites * Impl::kVerticesPerSprite);
+    m_impl->sprites.reserve(Impl::kMaxSprites);
 }
 
 SpriteBatch::~SpriteBatch()
@@ -137,82 +144,98 @@ SpriteBatch::~SpriteBatch()
 void SpriteBatch::begin(const Camera& camera)
 {
     m_impl->currentCamera = camera;
-    m_impl->vertices.clear();
-    m_impl->spriteCount = 0;
+    m_impl->sprites.clear();
 }
 
 void SpriteBatch::draw(const SpriteDesc& desc)
 {
-    if (m_impl->spriteCount >= Impl::kMaxSprites)
+    if (m_impl->sprites.size() >= Impl::kMaxSprites)
         return;
-
-    float cosR = std::cos(desc.rot);
-    float sinR = std::sin(desc.rot);
-
-    // Полуразмеры с учётом масштаба
-    float hw = desc.sx * 0.5f;
-    float hh = desc.sy * 0.5f;
-
-    // Четыре угла спрайта (с поворотом)
-    float corners[4][2] = {
-        { -hw, -hh }, { hw, -hh }, { hw, hh }, { -hw, hh }
-    };
-
-    float texCoords[4][2] = {
-        { desc.u0, desc.v1 }, { desc.u1, desc.v1 }, { desc.u1, desc.v0 }, { desc.u0, desc.v0 }
-    };
-
-    for (int i = 0; i < 4; ++i)
-    {
-        float lx = corners[i][0];
-        float ly = corners[i][1];
-
-        Impl::Vertex v;
-        v.x = desc.x + lx * cosR - ly * sinR;
-        v.y = desc.y + lx * sinR + ly * cosR;
-        v.u = texCoords[i][0];
-        v.v = texCoords[i][1];
-        v.r = desc.r;
-        v.g = desc.g;
-        v.b = desc.b;
-        v.a = desc.a;
-
-        m_impl->vertices.push_back(v);
-    }
-
-    m_impl->spriteCount++;
+    m_impl->sprites.push_back(desc);
 }
 
 void SpriteBatch::end()
 {
-    if (m_impl->vertices.empty())
+    if (m_impl->sprites.empty())
         return;
 
-    // Индексы
-    std::vector<uint32_t> indices;
-    indices.reserve(m_impl->spriteCount * Impl::kIndicesPerSprite);
-    for (size_t i = 0; i < m_impl->spriteCount; ++i)
+    // Группируем спрайты по текстурам
+    std::unordered_map<uint32_t, std::vector<const SpriteDesc*>> groups;
+    for (const auto& sprite : m_impl->sprites)
     {
-        uint32_t offset = static_cast<uint32_t>(i * Impl::kVerticesPerSprite);
-        indices.insert(indices.end(), { offset, offset + 1, offset + 2, offset, offset + 2, offset + 3 });
+        uint32_t texId = sprite.textureId ? sprite.textureId : m_impl->whiteTexture;
+        groups[texId].push_back(&sprite);
     }
 
-    // Загружаем данные в GPU
-    glNamedBufferData(m_impl->vbo, m_impl->vertices.size() * sizeof(Impl::Vertex), m_impl->vertices.data(), GL_DYNAMIC_DRAW);
-
-    glNamedBufferData(m_impl->ebo, indices.size() * sizeof(uint32_t), indices.data(), GL_DYNAMIC_DRAW);
-
-    // Рендерим
     m_impl->shader->bind();
-
     auto proj = m_impl->currentCamera.matrix();
     m_impl->shader->setUniformMat4("uProjection", proj.data());
 
     glBindVertexArray(m_impl->vao);
-    glBindTextureUnit(0, m_impl->whiteTexture); // TODO: поддержка атласа
-    glDrawElements(GL_TRIANGLES, static_cast<int>(indices.size()), GL_UNSIGNED_INT, nullptr);
-    glBindVertexArray(0);
 
+    // Рендерим каждую группу отдельно
+    for (const auto& [texId, spritePtrs] : groups)
+    {
+        std::vector<Impl::Vertex> vertices;
+        vertices.reserve(spritePtrs.size() * Impl::kVerticesPerSprite);
+
+        for (const auto* desc : spritePtrs)
+        {
+            float cosR = std::cos(desc->rot);
+            float sinR = std::sin(desc->rot);
+            float hw = desc->sx * 0.5f;
+            float hh = desc->sy * 0.5f;
+
+            float corners[4][2] = {
+                { -hw, -hh }, { hw, -hh }, { hw, hh }, { -hw, hh }
+            };
+
+            float texCoords[4][2] = {
+                { desc->u0, desc->v1 }, { desc->u1, desc->v1 }, { desc->u1, desc->v0 }, { desc->u0, desc->v0 }
+            };
+
+            for (int i = 0; i < 4; ++i)
+            {
+                float lx = corners[i][0];
+                float ly = corners[i][1];
+
+                Impl::Vertex v;
+                v.x = desc->x + lx * cosR - ly * sinR;
+                v.y = desc->y + lx * sinR + ly * cosR;
+                v.u = texCoords[i][0];
+                v.v = texCoords[i][1];
+                v.r = desc->r;
+                v.g = desc->g;
+                v.b = desc->b;
+                v.a = desc->a;
+
+                vertices.push_back(v);
+            }
+        }
+
+        // Индексы
+        std::vector<uint32_t> indices;
+        size_t spriteCount = spritePtrs.size();
+        indices.reserve(spriteCount * Impl::kIndicesPerSprite);
+        for (size_t i = 0; i < spriteCount; ++i)
+        {
+            uint32_t offset = static_cast<uint32_t>(i * Impl::kVerticesPerSprite);
+            indices.insert(indices.end(), { offset, offset + 1, offset + 2, offset, offset + 2, offset + 3 });
+        }
+
+        // Загружаем на GPU
+        glNamedBufferData(m_impl->vbo, vertices.size() * sizeof(Impl::Vertex), vertices.data(), GL_DYNAMIC_DRAW);
+
+        glNamedBufferData(m_impl->ebo, indices.size() * sizeof(uint32_t), indices.data(), GL_DYNAMIC_DRAW);
+
+        // Привязываем текстуру группы
+        glBindTextureUnit(0, texId);
+
+        // Рисуем
+        glDrawElements(GL_TRIANGLES, static_cast<int>(indices.size()), GL_UNSIGNED_INT, nullptr);
+    }
+
+    glBindVertexArray(0);
     ShaderProgram::unbind();
 }
 
