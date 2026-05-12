@@ -10,23 +10,64 @@
 namespace wingz::ecs
 {
 
+namespace
+{
+
+// Вспомогательная функция: создаёт одну частицу из эмиттера
+void spawnFromEmitter(
+    entt::registry& registry,
+    float x, float y,
+    const ParticleEmitter& emitter
+)
+{
+    static std::mt19937 rng(std::random_device {}());
+    static std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+    static std::uniform_real_distribution<float> distAngle(-3.14159265f, 3.14159265f);
+
+    float angle = emitter.baseAngle + distAngle(rng) * emitter.spreadAngle * 0.5f;
+    float speed = emitter.baseSpeed
+        + (dist01(rng) * 2.0f - 1.0f) * emitter.speedVariance;
+    float vx = std::cos(angle) * speed;
+    float vy = std::sin(angle) * speed;
+
+    Particle p;
+    p.lifetime = emitter.baseLifetime
+        + (dist01(rng) * 2.0f - 1.0f) * emitter.lifetimeVariance;
+    p.lifetime = std::max(0.05f, p.lifetime);
+    p.elapsed = 0.0f;
+    p.startR = emitter.startR;
+    p.startG = emitter.startG;
+    p.startB = emitter.startB;
+    p.startA = emitter.startA;
+    p.endR = emitter.endR;
+    p.endG = emitter.endG;
+    p.endB = emitter.endB;
+    p.endA = emitter.endA;
+    p.startWidth = emitter.startWidth;
+    p.startHeight = emitter.startHeight;
+    p.endWidth = emitter.endWidth;
+    p.endHeight = emitter.endHeight;
+    p.fadeOut = emitter.fadeOut;
+    p.flicker = emitter.flicker;
+    p.type = emitter.particleType;
+
+    Sprite sprite;
+    sprite.textureId = 0;
+    sprite.width = emitter.startWidth;
+    sprite.height = emitter.startHeight;
+    sprite.r = emitter.startR;
+    sprite.g = emitter.startG;
+    sprite.b = emitter.startB;
+    sprite.a = emitter.startA;
+
+    ParticleSystem::spawnParticle(registry, x, y, vx, vy, p, sprite);
+}
+
+} // namespace
+
 struct ParticleSystem::Impl
 {
-    std::mt19937 rng;
-    std::uniform_real_distribution<float> dist01; // 0..1
-    std::uniform_real_distribution<float> distAngle; // -PI..PI
-
-    Impl()
-        : rng(std::random_device {}())
-        , dist01(0.0f, 1.0f)
-        , distAngle(-3.14159265f, 3.14159265f)
-    {
-    }
-
-    float randomFloat(float min, float max)
-    {
-        return min + dist01(rng) * (max - min);
-    }
+    // Пусто — всё делается в статических функциях
 };
 
 ParticleSystem::ParticleSystem()
@@ -50,12 +91,6 @@ void ParticleSystem::update(entt::registry& registry, float dt)
         if (!emitter.active)
             continue;
 
-        // Подсчитываем текущее количество живых частиц от этого эмиттера
-        // (частицы не имеют прямой ссылки на эмиттер, поэтому используем подсчёт
-        // всех частиц с типом эмиттера — упрощение для песочницы)
-        // TODO: добавить поле emitterEntity в Particle
-
-        // Спавн по таймеру
         emitter.spawnTimer -= dt;
         while (emitter.spawnTimer <= 0.0f && emitter.active)
         {
@@ -63,47 +98,9 @@ void ParticleSystem::update(entt::registry& registry, float dt)
 
             if (emitter.oneShot)
             {
-                // Однократный выброс
                 if (emitter.spawnedCount < emitter.totalBurstCount)
                 {
-                    float angle = emitter.baseAngle
-                        + m_impl->distAngle(m_impl->rng) * emitter.spreadAngle * 0.5f;
-                    float speed = emitter.baseSpeed
-                        + m_impl->randomFloat(-emitter.speedVariance, emitter.speedVariance);
-                    float vx = std::cos(angle) * speed;
-                    float vy = std::sin(angle) * speed;
-
-                    Particle p;
-                    p.lifetime = emitter.baseLifetime
-                        + m_impl->randomFloat(-emitter.lifetimeVariance, emitter.lifetimeVariance);
-                    p.lifetime = std::max(0.05f, p.lifetime);
-                    p.elapsed = 0.0f;
-                    p.startR = emitter.startR;
-                    p.startG = emitter.startG;
-                    p.startB = emitter.startB;
-                    p.startA = emitter.startA;
-                    p.endR = emitter.endR;
-                    p.endG = emitter.endG;
-                    p.endB = emitter.endB;
-                    p.endA = emitter.endA;
-                    p.startWidth = emitter.startWidth;
-                    p.startHeight = emitter.startHeight;
-                    p.endWidth = emitter.endWidth;
-                    p.endHeight = emitter.endHeight;
-                    p.fadeOut = emitter.fadeOut;
-                    p.flicker = emitter.flicker;
-                    p.type = emitter.particleType;
-
-                    Sprite sprite;
-                    sprite.textureId = 0;
-                    sprite.width = emitter.startWidth;
-                    sprite.height = emitter.startHeight;
-                    sprite.r = emitter.startR;
-                    sprite.g = emitter.startG;
-                    sprite.b = emitter.startB;
-                    sprite.a = emitter.startA;
-
-                    spawnParticle(registry, transform.x, transform.y, vx, vy, p, sprite);
+                    spawnFromEmitter(registry, transform.x, transform.y, emitter);
                     ++emitter.spawnedCount;
                 }
                 else
@@ -113,66 +110,24 @@ void ParticleSystem::update(entt::registry& registry, float dt)
             }
             else
             {
-                // Постоянный эмиттер — создаём burstCount частиц
                 for (uint32_t i = 0; i < emitter.burstCount; ++i)
-                {
-                    float angle = emitter.baseAngle
-                        + m_impl->distAngle(m_impl->rng) * emitter.spreadAngle * 0.5f;
-                    float speed = emitter.baseSpeed
-                        + m_impl->randomFloat(-emitter.speedVariance, emitter.speedVariance);
-                    float vx = std::cos(angle) * speed;
-                    float vy = std::sin(angle) * speed;
-
-                    Particle p;
-                    p.lifetime = emitter.baseLifetime
-                        + m_impl->randomFloat(-emitter.lifetimeVariance, emitter.lifetimeVariance);
-                    p.lifetime = std::max(0.05f, p.lifetime);
-                    p.elapsed = 0.0f;
-                    p.startR = emitter.startR;
-                    p.startG = emitter.startG;
-                    p.startB = emitter.startB;
-                    p.startA = emitter.startA;
-                    p.endR = emitter.endR;
-                    p.endG = emitter.endG;
-                    p.endB = emitter.endB;
-                    p.endA = emitter.endA;
-                    p.startWidth = emitter.startWidth;
-                    p.startHeight = emitter.startHeight;
-                    p.endWidth = emitter.endWidth;
-                    p.endHeight = emitter.endHeight;
-                    p.fadeOut = emitter.fadeOut;
-                    p.flicker = emitter.flicker;
-                    p.type = emitter.particleType;
-
-                    Sprite sprite;
-                    sprite.textureId = 0;
-                    sprite.width = emitter.startWidth;
-                    sprite.height = emitter.startHeight;
-                    sprite.r = emitter.startR;
-                    sprite.g = emitter.startG;
-                    sprite.b = emitter.startB;
-                    sprite.a = emitter.startA;
-
-                    spawnParticle(registry, transform.x, transform.y, vx, vy, p, sprite);
-                }
+                    spawnFromEmitter(registry, transform.x, transform.y, emitter);
             }
         }
     }
 
     // ────────────────────────────────────────
-    // 2. Обновляем существующие частицы
+    // 2. Обновляем время жизни, цвет, размер
+    //    (НЕ двигаем — движение в Scene::update/updateVisuals)
     // ────────────────────────────────────────
-    auto particleView = registry.view<Particle, Transform, Velocity, Sprite>();
+    auto particleView = registry.view<Particle, Sprite>();
     std::vector<entt::entity> toDestroy;
 
     for (auto entity : particleView)
     {
         auto& particle = particleView.get<Particle>(entity);
-        auto& transform = particleView.get<Transform>(entity);
-        auto& velocity = particleView.get<Velocity>(entity);
         auto& sprite = particleView.get<Sprite>(entity);
 
-        // Обновляем время жизни
         particle.elapsed += dt;
 
         if (particle.elapsed >= particle.lifetime)
@@ -181,29 +136,20 @@ void ParticleSystem::update(entt::registry& registry, float dt)
             continue;
         }
 
-        // Двигаем частицу
-        transform.x += velocity.dx * dt;
-        transform.y += velocity.dy * dt;
-
-        // Затухание скорости (трение)
-        velocity.dx *= 0.98f;
-        velocity.dy *= 0.98f;
-
-        // Интерполяция размера
         float t = particle.elapsed / particle.lifetime;
+
+        // Размер
         sprite.width = particle.startWidth + (particle.endWidth - particle.startWidth) * t;
         sprite.height = particle.startHeight + (particle.endHeight - particle.startHeight) * t;
 
-        // Интерполяция цвета
+        // Цвет
         sprite.r = particle.startR + (particle.endR - particle.startR) * t;
         sprite.g = particle.startG + (particle.endG - particle.startG) * t;
         sprite.b = particle.startB + (particle.endB - particle.startB) * t;
 
         // Прозрачность
         if (particle.fadeOut)
-        {
             sprite.a = particle.startA + (particle.endA - particle.startA) * t;
-        }
 
         // Мерцание
         if (particle.flicker)
@@ -211,16 +157,11 @@ void ParticleSystem::update(entt::registry& registry, float dt)
             float flickerValue = 0.5f + 0.5f * std::sin(particle.elapsed * 20.0f);
             sprite.a *= flickerValue;
         }
-
-        // Поворот от скорости
-        transform.rot = std::atan2(velocity.dy, velocity.dx);
     }
 
     // Уничтожаем мёртвые частицы
     for (auto entity : toDestroy)
-    {
         registry.destroy(entity);
-    }
 }
 
 entt::entity ParticleSystem::spawnParticle(
@@ -247,49 +188,8 @@ void ParticleSystem::emitBurst(
     uint32_t count
 )
 {
-    Impl impl;
-
     for (uint32_t i = 0; i < count; ++i)
-    {
-        float angle = emitter.baseAngle
-            + impl.distAngle(impl.rng) * emitter.spreadAngle * 0.5f;
-        float speed = emitter.baseSpeed
-            + impl.randomFloat(-emitter.speedVariance, emitter.speedVariance);
-        float vx = std::cos(angle) * speed;
-        float vy = std::sin(angle) * speed;
-
-        Particle p;
-        p.lifetime = emitter.baseLifetime
-            + impl.randomFloat(-emitter.lifetimeVariance, emitter.lifetimeVariance);
-        p.lifetime = std::max(0.05f, p.lifetime);
-        p.elapsed = 0.0f;
-        p.startR = emitter.startR;
-        p.startG = emitter.startG;
-        p.startB = emitter.startB;
-        p.startA = emitter.startA;
-        p.endR = emitter.endR;
-        p.endG = emitter.endG;
-        p.endB = emitter.endB;
-        p.endA = emitter.endA;
-        p.startWidth = emitter.startWidth;
-        p.startHeight = emitter.startHeight;
-        p.endWidth = emitter.endWidth;
-        p.endHeight = emitter.endHeight;
-        p.fadeOut = emitter.fadeOut;
-        p.flicker = emitter.flicker;
-        p.type = emitter.particleType;
-
-        Sprite sprite;
-        sprite.textureId = 0;
-        sprite.width = emitter.startWidth;
-        sprite.height = emitter.startHeight;
-        sprite.r = emitter.startR;
-        sprite.g = emitter.startG;
-        sprite.b = emitter.startB;
-        sprite.a = emitter.startA;
-
-        spawnParticle(registry, x, y, vx, vy, p, sprite);
-    }
+        spawnFromEmitter(registry, x, y, emitter);
 }
 
 } // namespace wingz::ecs

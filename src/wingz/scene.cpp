@@ -43,10 +43,10 @@ void Scene::update(float dt)
     // 1. Ввод
     ecs::inputSystem(m_impl->registry);
 
-    // 2. Движение
+    // 2. Движение (все сущности с Velocity)
     ecs::movementSystem(m_impl->registry, dt);
 
-    // 3. Частицы
+    // 3. Частицы (эмиттеры, время жизни, цвет, размер)
     m_impl->particleSystem->update(m_impl->registry, dt);
 
     // 4. Физика (коллизии)
@@ -62,6 +62,28 @@ void Scene::update(float dt)
             );
         }
     );
+}
+
+void Scene::updateVisuals(float dt)
+{
+    // Двигаем только частицы (у них есть компонент Particle)
+    auto moveView = m_impl->registry.view<ecs::Particle, ecs::Transform, ecs::Velocity>();
+    for (auto entity : moveView)
+    {
+        auto& transform = moveView.get<ecs::Transform>(entity);
+        auto& velocity = moveView.get<ecs::Velocity>(entity);
+
+        transform.x += velocity.dx * dt;
+        transform.y += velocity.dy * dt;
+        transform.rot = std::atan2(velocity.dy, velocity.dx);
+
+        // Затухание скорости
+        velocity.dx *= 0.98f;
+        velocity.dy *= 0.98f;
+    }
+
+    // Обновляем эмиттеры, время жизни, цвет, размер
+    m_impl->particleSystem->update(m_impl->registry, dt);
 }
 
 void Scene::render(gfx::SpriteBatch& batch)

@@ -64,83 +64,90 @@ protected:
         m_scene = std::make_unique<wingz::Scene>();
         m_scene->init();
 
+        // ────────────────────────────────────────────
+        // Эмиттеры частиц — создаются и на сервере, и на клиенте
+        // ────────────────────────────────────────────
+
+        // Эмиттер искр (центр экрана)
+        {
+            auto emitterEntity = m_scene->registry().create();
+            m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
+
+            wingz::ecs::ParticleEmitter emitter;
+            emitter.spawnInterval = 0.02f;
+            emitter.burstCount = 2;
+            emitter.baseLifetime = 0.8f;
+            emitter.lifetimeVariance = 0.3f;
+            emitter.baseSpeed = 80.0f;
+            emitter.speedVariance = 40.0f;
+            emitter.spreadAngle = 0.5f;
+            emitter.baseAngle = -3.14159265f / 2.0f;
+            emitter.startR = 1.0f;
+            emitter.startG = 0.6f;
+            emitter.startB = 0.0f;
+            emitter.startA = 1.0f;
+            emitter.endR = 1.0f;
+            emitter.endG = 0.2f;
+            emitter.endB = 0.0f;
+            emitter.endA = 0.0f;
+            emitter.startWidth = 6.0f;
+            emitter.startHeight = 6.0f;
+            emitter.endWidth = 2.0f;
+            emitter.endHeight = 2.0f;
+            emitter.fadeOut = true;
+            emitter.flicker = true;
+            emitter.particleType = wingz::ecs::Particle::Type::Spark;
+            emitter.active = true;
+
+            m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
+            m_scene->registry().emplace<wingz::ecs::Tag>(emitterEntity, "SparkEmitter");
+        }
+
+        // Эмиттер дыма
+        {
+            auto emitterEntity = m_scene->registry().create();
+            m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
+
+            wingz::ecs::ParticleEmitter emitter;
+            emitter.spawnInterval = 0.1f;
+            emitter.burstCount = 1;
+            emitter.baseLifetime = 2.0f;
+            emitter.lifetimeVariance = 0.5f;
+            emitter.baseSpeed = 20.0f;
+            emitter.speedVariance = 10.0f;
+            emitter.spreadAngle = 0.8f;
+            emitter.baseAngle = -3.14159265f / 2.0f;
+            emitter.startR = 0.5f;
+            emitter.startG = 0.5f;
+            emitter.startB = 0.5f;
+            emitter.startA = 0.6f;
+            emitter.endR = 0.3f;
+            emitter.endG = 0.3f;
+            emitter.endB = 0.3f;
+            emitter.endA = 0.0f;
+            emitter.startWidth = 16.0f;
+            emitter.startHeight = 16.0f;
+            emitter.endWidth = 32.0f;
+            emitter.endHeight = 32.0f;
+            emitter.fadeOut = true;
+            emitter.flicker = false;
+            emitter.particleType = wingz::ecs::Particle::Type::Smoke;
+            emitter.active = true;
+
+            m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
+            m_scene->registry().emplace<wingz::ecs::Tag>(emitterEntity, "SmokeEmitter");
+        }
+
+        // ────────────────────────────────────────────
+        // Сеть
+        // ────────────────────────────────────────────
+
         if (m_isServer)
         {
             m_host = wingz::net::Host::createServer(7777);
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
             m_localPlayerEntity = createPlayer(0);
             createWalls();
-            // ────────────────────────────────────────────
-            // Тест системы частиц
-            // ────────────────────────────────────────────
-
-            // 1. Постоянный эмиттер искр из центра (типа костёр/двигатель)
-            {
-                auto emitterEntity = m_scene->registry().create();
-                m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
-
-                wingz::ecs::ParticleEmitter emitter;
-                emitter.spawnInterval = 0.02f; // каждые 20 мс
-                emitter.burstCount = 2; // по 2 частицы
-                emitter.baseLifetime = 0.8f;
-                emitter.lifetimeVariance = 0.3f;
-                emitter.baseSpeed = 80.0f;
-                emitter.speedVariance = 40.0f;
-                emitter.spreadAngle = 0.5f; // узкий конус вверх
-                emitter.baseAngle = -3.14159265f / 2.0f; // вверх (-PI/2)
-                emitter.startR = 1.0f;
-                emitter.startG = 0.6f;
-                emitter.startB = 0.0f;
-                emitter.startA = 1.0f;
-                emitter.endR = 1.0f;
-                emitter.endG = 0.2f;
-                emitter.endB = 0.0f;
-                emitter.endA = 0.0f;
-                emitter.startWidth = 6.0f;
-                emitter.startHeight = 6.0f;
-                emitter.endWidth = 2.0f;
-                emitter.endHeight = 2.0f;
-                emitter.fadeOut = true;
-                emitter.flicker = true;
-                emitter.particleType = wingz::ecs::Particle::Type::Spark;
-                emitter.active = true;
-
-                m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
-            }
-
-            // 2. Эмиттер дыма (большие медленные частицы)
-            {
-                auto emitterEntity = m_scene->registry().create();
-                m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
-
-                wingz::ecs::ParticleEmitter emitter;
-                emitter.spawnInterval = 0.1f;
-                emitter.burstCount = 1;
-                emitter.baseLifetime = 2.0f;
-                emitter.lifetimeVariance = 0.5f;
-                emitter.baseSpeed = 20.0f;
-                emitter.speedVariance = 10.0f;
-                emitter.spreadAngle = 0.8f;
-                emitter.baseAngle = -3.14159265f / 2.0f;
-                emitter.startR = 0.5f;
-                emitter.startG = 0.5f;
-                emitter.startB = 0.5f;
-                emitter.startA = 0.6f;
-                emitter.endR = 0.3f;
-                emitter.endG = 0.3f;
-                emitter.endB = 0.3f;
-                emitter.endA = 0.0f;
-                emitter.startWidth = 16.0f;
-                emitter.startHeight = 16.0f;
-                emitter.endWidth = 32.0f;
-                emitter.endHeight = 32.0f;
-                emitter.fadeOut = true;
-                emitter.flicker = false;
-                emitter.particleType = wingz::ecs::Particle::Type::Smoke;
-                emitter.active = true;
-
-                m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
-            }
             spdlog::info("Режим сервера");
         }
         else
@@ -183,40 +190,14 @@ protected:
         if (snap.mouseButtons[static_cast<size_t>(wingz::input::MouseButton::Left)]
             == wingz::input::InputState::Pressed)
         {
-            // Получаем позицию мыши в мировых координатах
             float worldX = static_cast<float>(snap.mouseX);
             float worldY = static_cast<float>(snap.mouseY);
 
-            // Создаём burst-эмиттер для взрыва
-            wingz::ecs::ParticleEmitter explosionEmitter;
-            explosionEmitter.baseLifetime = 0.6f;
-            explosionEmitter.lifetimeVariance = 0.2f;
-            explosionEmitter.baseSpeed = 200.0f;
-            explosionEmitter.speedVariance = 100.0f;
-            explosionEmitter.spreadAngle = 6.283185f; // во все стороны
-            explosionEmitter.baseAngle = 0.0f;
-            explosionEmitter.startR = 1.0f;
-            explosionEmitter.startG = 0.8f;
-            explosionEmitter.startB = 0.2f;
-            explosionEmitter.startA = 1.0f;
-            explosionEmitter.endR = 1.0f;
-            explosionEmitter.endG = 0.1f;
-            explosionEmitter.endB = 0.0f;
-            explosionEmitter.endA = 0.0f;
-            explosionEmitter.startWidth = 10.0f;
-            explosionEmitter.startHeight = 10.0f;
-            explosionEmitter.endWidth = 2.0f;
-            explosionEmitter.endHeight = 2.0f;
-            explosionEmitter.fadeOut = true;
-            explosionEmitter.flicker = true;
-            explosionEmitter.particleType = wingz::ecs::Particle::Type::Explosion;
+            // Отправляем событие взрыва через сеть
+            sendParticleBurst(worldX, worldY);
 
-            wingz::ecs::ParticleSystem::emitBurst(
-                m_scene->registry(),
-                worldX, worldY,
-                explosionEmitter,
-                30 // количество частиц
-            );
+            // Локально создаём частицы сразу (для мгновенного отклика)
+            spawnExplosion(worldX, worldY);
         }
 
         if (m_localPlayerEntity != entt::null && m_scene->registry().valid(m_localPlayerEntity))
@@ -236,6 +217,7 @@ protected:
 
             if (m_isServer)
             {
+                // Сервер: полный цикл (ввод, движение, частицы, физика)
                 if (m_networkTick % 2 == 0)
                 {
                     m_scene->update(1.0f / 30.0f);
@@ -248,7 +230,9 @@ protected:
             }
             else if (m_connected)
             {
-                // Отправляем инпут каждый второй кадр, используя локальный тик
+                // Клиент: только визуальные системы (частицы)
+                m_scene->updateVisuals(dt);
+
                 if (m_networkTick % 2 == 0)
                     sendInputToServer(moveX, moveY);
             }
@@ -317,6 +301,14 @@ protected:
 
             ImGui::Text("  %s (pid=%u): raw(%.0f, %.0f) interp(%.0f, %.0f)", tag.name.c_str(), p.id, t.x, t.y, interpX, interpY);
         }
+
+        // Статистика частиц
+        auto particleView = m_scene->registry().view<wingz::ecs::Particle>();
+        ImGui::Text("Particles alive: %zu", particleView.size());
+
+        auto emitterView = m_scene->registry().view<wingz::ecs::ParticleEmitter>();
+        ImGui::Text("Emitters active: %zu", emitterView.size());
+
         ImGui::End();
         m_debugUI->endFrame();
 
@@ -401,6 +393,31 @@ private:
         ser.writeU8(0); // fire = false
 
         m_host->send(0, msg, false);
+    }
+
+    void sendParticleBurst(float worldX, float worldY)
+    {
+        if (!m_host || !m_host->isRunning())
+            return;
+
+        wingz::net::Message msg;
+        msg.header.type = wingz::net::MessageType::ParticleBurst;
+        msg.header.tick = m_networkTick;
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeF32(worldX);
+        ser.writeF32(worldY);
+
+        if (m_isServer)
+        {
+            // Сервер сразу рассылает всем клиентам
+            m_host->broadcast(msg, false);
+        }
+        else if (m_connected)
+        {
+            // Клиент отправляет серверу
+            m_host->send(0, msg, false);
+        }
     }
 
     void handleNetEvent(const wingz::net::NetEvent& e)
@@ -491,6 +508,23 @@ private:
                     }
                 }
             }
+            else if (e.message.header.type == wingz::net::MessageType::ParticleBurst)
+            {
+                // Взрыв от другого игрока
+                wingz::net::Serializer ser(e.message.data);
+                if (ser.remainingBytes() >= sizeof(float) * 2)
+                {
+                    float x = ser.readF32();
+                    float y = ser.readF32();
+                    spawnExplosion(x, y);
+                }
+
+                // Сервер пересылает взрыв всем остальным клиентам
+                if (m_isServer)
+                {
+                    m_host->broadcast(e.message, false, e.peerId);
+                }
+            }
             break;
         }
         default:
@@ -498,12 +532,48 @@ private:
         }
     }
 
+    void spawnExplosion(float x, float y)
+    {
+        wingz::ecs::ParticleEmitter explosionEmitter;
+        explosionEmitter.baseLifetime = 0.6f;
+        explosionEmitter.lifetimeVariance = 0.2f;
+        explosionEmitter.baseSpeed = 200.0f;
+        explosionEmitter.speedVariance = 100.0f;
+        explosionEmitter.spreadAngle = 6.283185f;
+        explosionEmitter.baseAngle = 0.0f;
+        explosionEmitter.startR = 1.0f;
+        explosionEmitter.startG = 0.8f;
+        explosionEmitter.startB = 0.2f;
+        explosionEmitter.startA = 1.0f;
+        explosionEmitter.endR = 1.0f;
+        explosionEmitter.endG = 0.1f;
+        explosionEmitter.endB = 0.0f;
+        explosionEmitter.endA = 0.0f;
+        explosionEmitter.startWidth = 10.0f;
+        explosionEmitter.startHeight = 10.0f;
+        explosionEmitter.endWidth = 2.0f;
+        explosionEmitter.endHeight = 2.0f;
+        explosionEmitter.fadeOut = true;
+        explosionEmitter.flicker = true;
+        explosionEmitter.particleType = wingz::ecs::Particle::Type::Explosion;
+
+        wingz::ecs::ParticleSystem::emitBurst(
+            m_scene->registry(),
+            x, y,
+            explosionEmitter,
+            30
+        );
+    }
+
+    // Интерполяция
+    wingz::net::TickNumber m_lastServerTick = 0; // последний тик, пришедший от сервера
+    std::unique_ptr<wingz::net::ClientInterpolation> m_interpolation;
+
     bool m_isServer;
     bool m_connected = false;
     wingz::net::PeerId m_clientPlayerId = 0xFFFFFFFF;
     entt::entity m_localPlayerEntity = entt::null;
     wingz::net::TickNumber m_networkTick = 0;
-    wingz::net::TickNumber m_lastServerTick = 0; // последний тик, пришедший от сервера
 
     std::unique_ptr<wingz::gfx::SpriteBatch> m_spriteBatch;
     std::unique_ptr<wingz::gfx::DebugUI> m_debugUI;
@@ -511,7 +581,6 @@ private:
     std::unique_ptr<wingz::Scene> m_scene;
     std::unique_ptr<wingz::net::Host> m_host;
     std::unique_ptr<wingz::net::ReplicationSystem> m_replication;
-    std::unique_ptr<wingz::net::ClientInterpolation> m_interpolation;
 };
 
 int main(int argc, char* argv[])

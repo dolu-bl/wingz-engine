@@ -32,6 +32,9 @@ enum class MessageType : uint8_t
     EntitySpawn,
     EntityDestroy,
 
+    // Эффекты
+    ParticleBurst,
+
     // Служебные
     Ping,
     Pong

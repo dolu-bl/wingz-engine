@@ -34,6 +34,10 @@ public:
     /// Обновление логики.
     void update(float dt);
 
+    /// Обновление только визуальных систем (частицы).
+    /// Вызывается на клиенте каждый кадр.
+    void updateVisuals(float dt);
+
     /// Отрисовка.
     void render(gfx::SpriteBatch& batch);
 
