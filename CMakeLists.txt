@@ -26,8 +26,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(glfw3 REQUIRED)
 find_package(EnTT REQUIRED)
-find_package(imgui REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 add_subdirectory(src)
 
