@@ -1,5 +1,3 @@
-#include <chrono>
-#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -13,19 +11,22 @@
 #include <spdlog/spdlog.h>
 
 #include <wingz/app.h>
+#include <wingz/ecs/components.h>
 #include <wingz/gfx/camera.h>
 #include <wingz/gfx/debug_ui.h>
 #include <wingz/gfx/sprite_batch.h>
 #include <wingz/gfx/texture.h>
+#include <wingz/input/action_map.h>
+#include <wingz/input/input_manager.h>
+#include <wingz/scene.h>
 #include <wingz/window.h>
 
-/// Тестовое приложение с ImGui и текстурой.
 class SandboxApp : public wingz::App
 {
 protected:
     void onInit() override
     {
-        createWindow(wingz::WindowDesc { .width = 1280, .height = 720, .title = "Wingz Engine — Sprite + ImGui" });
+        createWindow(wingz::WindowDesc { .width = 1280, .height = 720, .title = "Wingz Engine — ECS + Input" });
 
         if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
             throw std::runtime_error("Не удалось загрузить OpenGL через glad");
@@ -42,20 +43,32 @@ protected:
 
         // Графика
         m_spriteBatch = std::make_unique<wingz::gfx::SpriteBatch>();
-
-        m_camera.left = 0.0f;
-        m_camera.right = static_cast<float>(window().width());
-        m_camera.bottom = static_cast<float>(window().height());
-        m_camera.top = 0.0f;
-
-        // ImGui
         m_debugUI = std::make_unique<wingz::gfx::DebugUI>(window().nativeHandle());
 
-        // Загружаем текстуру (замените путь на свою или создайте заглушку)
+        // Ввод
+        m_inputManager = std::make_unique<wingz::input::InputManager>();
+        m_inputManager->attach(window().nativeHandle());
+        m_actionMap = std::make_unique<wingz::input::ActionMap>();
+
+        // ESC = выход
+        m_actionMap->addAction(
+            "move_up",
+            wingz::input::InputBinding {
+                .keys = { wingz::input::Key::W },
+                .mouseButtons = {} },
+            []()
+            { spdlog::debug("W нажата"); }
+        );
+
+        // Сцена
+        m_scene = std::make_unique<wingz::Scene>();
+        m_scene->init();
+
+        // Загружаем текстуру
         try
         {
             m_texture = std::make_unique<wingz::gfx::Texture>(
-                "/mnt/develop/github/wingz-engine/assets/test.png"
+                "/home/mikhail/develop/wingz-engine/assets/test.png"
             );
             m_useTexture = true;
         }
@@ -64,61 +77,51 @@ protected:
             spdlog::warn("Тестовая текстура не загружена: {}", e.what());
             m_useTexture = false;
         }
+
+        // Создаём тестовую сущность через ECS
+        auto entity = m_scene->registry().create();
+        m_scene->registry().emplace<wingz::ecs::Transform>(entity, 640.0f, 360.0f, 0.0f);
+        m_scene->registry().emplace<wingz::ecs::Velocity>(entity, 100.0f, 0.0f, 1.5f); // движется вправо, вращается
+        m_scene->registry().emplace<wingz::ecs::Sprite>(entity, m_texture ? m_texture->handle() : 0u, 0.0f, 0.0f, 1.0f, 1.0f, 128.0f, 128.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+        m_scene->registry().emplace<wingz::ecs::Tag>(entity, "Player");
+        m_scene->registry().emplace<wingz::ecs::Player>(entity, 1);
     }
 
     void onUpdate(float dt) override
     {
+        // 1. Обновляем состояния клавиш
+        m_inputManager->beginFrame();
+
+        // 2. Проверяем ESC напрямую (ImGui может перехватывать клавиатуру)
+        auto& snap = m_inputManager->snapshot();
+        if (snap.keys[static_cast<size_t>(wingz::input::Key::Escape)] == wingz::input::InputState::Pressed)
+        {
+            spdlog::info("ESC нажат, выход...");
+            glfwSetWindowShouldClose(window().nativeHandle(), GLFW_TRUE);
+            return;
+        }
+
+        // 3. Обрабатываем остальные действия
+        m_actionMap->update(snap);
+
+        // 4. Логика
+        m_scene->update(dt);
+
+        // 5. Рендер
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        m_scene->render(*m_spriteBatch);
 
-        static float rotation = 0.0f;
-        rotation += dt;
-
-        // Рисуем спрайты
-        m_spriteBatch->begin(m_camera);
-
-        wingz::gfx::SpriteDesc desc;
-        desc.x = 640.0f;
-        desc.y = 360.0f;
-        desc.sx = 256.0f;
-        desc.sy = 256.0f;
-        desc.rot = rotation;
-
-        if (m_useTexture && m_texture)
-        {
-            desc.textureId = m_texture->handle();
-            desc.u0 = 0.0f;
-            desc.v0 = 0.0f;
-            desc.u1 = 1.0f;
-            desc.v1 = 1.0f;
-            desc.r = 1.0f;
-            desc.g = 1.0f;
-            desc.b = 1.0f;
-            desc.a = 1.0f;
-        }
-        else
-        {
-            desc.textureId = 0;
-            desc.r = 0.2f;
-            desc.g = 0.6f;
-            desc.b = 1.0f;
-            desc.a = 1.0f;
-        }
-
-        m_spriteBatch->draw(desc);
-        m_spriteBatch->end();
-
-        // ImGui поверх всего
+        // 6. ImGui
         m_debugUI->beginFrame();
-
-        ImGui::Begin("Stats");
+        ImGui::Begin("ECS Info");
         ImGui::Text("FPS: %.1f", 1.0f / dt);
-        ImGui::Text("Frame time: %.3f ms", dt * 1000.0f);
-        ImGui::Text("Rotation: %.2f", rotation);
-        ImGui::Checkbox("Use texture", &m_useTexture);
+        ImGui::Text("Entities: %zu", m_scene->registry().storage<entt::entity>().in_use());
         ImGui::End();
-
         m_debugUI->endFrame();
+
+        // 7. Завершаем кадр ввода
+        m_inputManager->endFrame();
     }
 
     void onShutdown() override
@@ -127,8 +130,10 @@ protected:
     }
 
     std::unique_ptr<wingz::gfx::SpriteBatch> m_spriteBatch;
-    wingz::gfx::Camera m_camera;
     std::unique_ptr<wingz::gfx::DebugUI> m_debugUI;
+    std::unique_ptr<wingz::input::InputManager> m_inputManager;
+    std::unique_ptr<wingz::input::ActionMap> m_actionMap;
+    std::unique_ptr<wingz::Scene> m_scene;
     std::unique_ptr<wingz::gfx::Texture> m_texture;
     bool m_useTexture = false;
 };

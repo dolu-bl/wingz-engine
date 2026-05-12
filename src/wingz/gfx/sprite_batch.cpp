@@ -6,9 +6,9 @@
 
 #include <glad/glad.h>
 
-#include "camera.h"
-#include "shader.h"
-#include "sprite_batch.h"
+#include "wingz/gfx/camera.h"
+#include "wingz/gfx/shader.h"
+#include "wingz/gfx/sprite_batch.h"
 
 namespace wingz::gfx
 {
