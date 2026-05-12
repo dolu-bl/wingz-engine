@@ -28,6 +28,7 @@ find_package(glfw3 REQUIRED)
 find_package(EnTT REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(enet REQUIRED)
 
 add_subdirectory(src)
 

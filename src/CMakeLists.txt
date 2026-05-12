@@ -20,6 +20,9 @@ add_library(wingz STATIC
     wingz/input/input_manager.cpp
     wingz/input/action_map.cpp
     wingz/physics/physics_world.cpp
+    wingz/net/connection.cpp
+    wingz/net/host.cpp
+    wingz/net/replication.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/glad/src/glad.c
     ${IMGUI_SOURCES}
 )
@@ -42,6 +45,7 @@ target_link_libraries(wingz
         EnTT::EnTT
         spdlog::spdlog
         nlohmann_json::nlohmann_json
+        enet::enet
     PRIVATE
         ${CMAKE_DL_LIBS} 
 )
