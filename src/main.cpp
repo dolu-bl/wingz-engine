@@ -21,6 +21,7 @@
 #include <wingz/input/input_manager.h>
 #include <wingz/net/host.h>
 #include <wingz/net/replication.h>
+#include <wingz/net/serializer.h>
 #include <wingz/net/types.h>
 #include <wingz/physics/collider.h>
 #include <wingz/scene.h>
@@ -229,12 +230,16 @@ private:
         if (!m_host || !m_connected)
             return;
 
-        wingz::net::InputPacket p { m_networkTick, mx, my, false };
         wingz::net::Message msg;
         msg.header.type = wingz::net::MessageType::InputState;
         msg.header.tick = m_networkTick;
-        msg.data.resize(sizeof(p));
-        std::memcpy(msg.data.data(), &p, sizeof(p));
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeU32(m_networkTick);
+        ser.writeF32(mx);
+        ser.writeF32(my);
+        ser.writeU8(0); // fire = false
+
         m_host->send(0, msg, false);
     }
 
@@ -267,19 +272,29 @@ private:
                 m_connected = false;
             break;
         case wingz::net::NetEvent::Type::Data:
+        {
+            // Проверяем тип сообщения ПОСЛЕ того, как убедились, что это Data
             if (e.message.header.type == wingz::net::MessageType::InputState)
             {
-                if (m_isServer && e.message.data.size() >= sizeof(wingz::net::InputPacket))
+                if (m_isServer)
                 {
-                    auto* inp = reinterpret_cast<const wingz::net::InputPacket*>(e.message.data.data());
-                    auto v = m_scene->registry().view<wingz::ecs::Player, wingz::ecs::InputIntent>();
-                    for (auto en : v)
+                    wingz::net::Serializer ser(e.message.data);
+                    if (ser.remainingBytes() >= sizeof(uint32_t) + sizeof(float) * 2 + sizeof(uint8_t))
                     {
-                        if (v.get<wingz::ecs::Player>(en).id == m_clientPlayerId)
+                        uint32_t tick = ser.readU32();
+                        float mx = ser.readF32();
+                        float my = ser.readF32();
+                        /* bool fire = */ ser.readU8();
+
+                        auto v = m_scene->registry().view<wingz::ecs::Player, wingz::ecs::InputIntent>();
+                        for (auto en : v)
                         {
-                            v.get<wingz::ecs::InputIntent>(en).moveX = inp->moveX;
-                            v.get<wingz::ecs::InputIntent>(en).moveY = inp->moveY;
-                            break;
+                            if (v.get<wingz::ecs::Player>(en).id == m_clientPlayerId)
+                            {
+                                v.get<wingz::ecs::InputIntent>(en).moveX = mx;
+                                v.get<wingz::ecs::InputIntent>(en).moveY = my;
+                                break;
+                            }
                         }
                     }
                 }
@@ -306,6 +321,7 @@ private:
                 }
             }
             break;
+        }
         default:
             break;
         }

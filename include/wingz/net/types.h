@@ -61,4 +61,22 @@ struct InputPacket
     bool fire;
 };
 
+/// Сериализованное состояние одной сущности для репликации.
+/// Эта структура НЕ передаётся по сети напрямую — используется Serializer.
+struct SerializedEntityState
+{
+    NetEntityId netId;
+    uint8_t playerId;
+    float x;
+    float y;
+    float rot;
+    float vx;
+    float vy;
+    float drot;
+    float r;
+    float g;
+    float b;
+    float a;
+};
+
 } // namespace wingz::net
