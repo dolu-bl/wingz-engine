@@ -13,6 +13,7 @@ class WingzEngineConanFile(ConanFile):
         self.requires("entt/3.12.2")
         self.requires("spdlog/1.12.0")
         self.requires("nlohmann_json/3.11.2")
+        self.requires("enet/1.3.17")
 
     def layout(self):
         cmake_layout(self)
