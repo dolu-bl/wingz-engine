@@ -13,6 +13,8 @@
 
 #include <wingz/app.h>
 #include <wingz/ecs/components.h>
+#include <wingz/ecs/particle.h>
+#include <wingz/ecs/particle_system.h>
 #include <wingz/gfx/camera.h>
 #include <wingz/gfx/debug_ui.h>
 #include <wingz/gfx/sprite_batch.h>
@@ -68,6 +70,77 @@ protected:
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
             m_localPlayerEntity = createPlayer(0);
             createWalls();
+            // ────────────────────────────────────────────
+            // Тест системы частиц
+            // ────────────────────────────────────────────
+
+            // 1. Постоянный эмиттер искр из центра (типа костёр/двигатель)
+            {
+                auto emitterEntity = m_scene->registry().create();
+                m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
+
+                wingz::ecs::ParticleEmitter emitter;
+                emitter.spawnInterval = 0.02f; // каждые 20 мс
+                emitter.burstCount = 2; // по 2 частицы
+                emitter.baseLifetime = 0.8f;
+                emitter.lifetimeVariance = 0.3f;
+                emitter.baseSpeed = 80.0f;
+                emitter.speedVariance = 40.0f;
+                emitter.spreadAngle = 0.5f; // узкий конус вверх
+                emitter.baseAngle = -3.14159265f / 2.0f; // вверх (-PI/2)
+                emitter.startR = 1.0f;
+                emitter.startG = 0.6f;
+                emitter.startB = 0.0f;
+                emitter.startA = 1.0f;
+                emitter.endR = 1.0f;
+                emitter.endG = 0.2f;
+                emitter.endB = 0.0f;
+                emitter.endA = 0.0f;
+                emitter.startWidth = 6.0f;
+                emitter.startHeight = 6.0f;
+                emitter.endWidth = 2.0f;
+                emitter.endHeight = 2.0f;
+                emitter.fadeOut = true;
+                emitter.flicker = true;
+                emitter.particleType = wingz::ecs::Particle::Type::Spark;
+                emitter.active = true;
+
+                m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
+            }
+
+            // 2. Эмиттер дыма (большие медленные частицы)
+            {
+                auto emitterEntity = m_scene->registry().create();
+                m_scene->registry().emplace<wingz::ecs::Transform>(emitterEntity, 640.0f, 360.0f, 0.0f);
+
+                wingz::ecs::ParticleEmitter emitter;
+                emitter.spawnInterval = 0.1f;
+                emitter.burstCount = 1;
+                emitter.baseLifetime = 2.0f;
+                emitter.lifetimeVariance = 0.5f;
+                emitter.baseSpeed = 20.0f;
+                emitter.speedVariance = 10.0f;
+                emitter.spreadAngle = 0.8f;
+                emitter.baseAngle = -3.14159265f / 2.0f;
+                emitter.startR = 0.5f;
+                emitter.startG = 0.5f;
+                emitter.startB = 0.5f;
+                emitter.startA = 0.6f;
+                emitter.endR = 0.3f;
+                emitter.endG = 0.3f;
+                emitter.endB = 0.3f;
+                emitter.endA = 0.0f;
+                emitter.startWidth = 16.0f;
+                emitter.startHeight = 16.0f;
+                emitter.endWidth = 32.0f;
+                emitter.endHeight = 32.0f;
+                emitter.fadeOut = true;
+                emitter.flicker = false;
+                emitter.particleType = wingz::ecs::Particle::Type::Smoke;
+                emitter.active = true;
+
+                m_scene->registry().emplace<wingz::ecs::ParticleEmitter>(emitterEntity, emitter);
+            }
             spdlog::info("Режим сервера");
         }
         else
@@ -105,6 +178,46 @@ protected:
             moveY -= 1.0f;
         if (snap.keys[static_cast<size_t>(wingz::input::Key::S)] >= wingz::input::InputState::Pressed)
             moveY += 1.0f;
+
+        // Тест: взрыв частиц по клику левой кнопкой мыши
+        if (snap.mouseButtons[static_cast<size_t>(wingz::input::MouseButton::Left)]
+            == wingz::input::InputState::Pressed)
+        {
+            // Получаем позицию мыши в мировых координатах
+            float worldX = static_cast<float>(snap.mouseX);
+            float worldY = static_cast<float>(snap.mouseY);
+
+            // Создаём burst-эмиттер для взрыва
+            wingz::ecs::ParticleEmitter explosionEmitter;
+            explosionEmitter.baseLifetime = 0.6f;
+            explosionEmitter.lifetimeVariance = 0.2f;
+            explosionEmitter.baseSpeed = 200.0f;
+            explosionEmitter.speedVariance = 100.0f;
+            explosionEmitter.spreadAngle = 6.283185f; // во все стороны
+            explosionEmitter.baseAngle = 0.0f;
+            explosionEmitter.startR = 1.0f;
+            explosionEmitter.startG = 0.8f;
+            explosionEmitter.startB = 0.2f;
+            explosionEmitter.startA = 1.0f;
+            explosionEmitter.endR = 1.0f;
+            explosionEmitter.endG = 0.1f;
+            explosionEmitter.endB = 0.0f;
+            explosionEmitter.endA = 0.0f;
+            explosionEmitter.startWidth = 10.0f;
+            explosionEmitter.startHeight = 10.0f;
+            explosionEmitter.endWidth = 2.0f;
+            explosionEmitter.endHeight = 2.0f;
+            explosionEmitter.fadeOut = true;
+            explosionEmitter.flicker = true;
+            explosionEmitter.particleType = wingz::ecs::Particle::Type::Explosion;
+
+            wingz::ecs::ParticleSystem::emitBurst(
+                m_scene->registry(),
+                worldX, worldY,
+                explosionEmitter,
+                30 // количество частиц
+            );
+        }
 
         if (m_localPlayerEntity != entt::null && m_scene->registry().valid(m_localPlayerEntity))
         {

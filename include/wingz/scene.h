@@ -12,10 +12,9 @@ namespace gfx
 class SpriteBatch;
 class Camera;
 }
-namespace input
+namespace ecs
 {
-class InputManager;
-class ActionMap;
+class ParticleSystem;
 }
 
 /// Контейнер для ECS-мира и систем.

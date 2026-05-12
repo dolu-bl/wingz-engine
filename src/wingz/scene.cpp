@@ -3,6 +3,8 @@
 #include "wingz/scene.h"
 
 #include "wingz/ecs/components.h"
+#include "wingz/ecs/particle.h"
+#include "wingz/ecs/particle_system.h"
 #include "wingz/ecs/systems.h"
 #include "wingz/gfx/camera.h"
 #include "wingz/gfx/sprite_batch.h"
@@ -16,12 +18,14 @@ struct Scene::Impl
     entt::registry registry;
     gfx::Camera camera;
     std::unique_ptr<physics::PhysicsWorld> physicsWorld;
+    std::unique_ptr<ecs::ParticleSystem> particleSystem;
 };
 
 Scene::Scene()
     : m_impl(std::make_unique<Impl>())
 {
     m_impl->physicsWorld = std::make_unique<physics::PhysicsWorld>();
+    m_impl->particleSystem = std::make_unique<ecs::ParticleSystem>();
 }
 
 Scene::~Scene() = default;
@@ -42,7 +46,10 @@ void Scene::update(float dt)
     // 2. Движение
     ecs::movementSystem(m_impl->registry, dt);
 
-    // 3. Физика (коллизии)
+    // 3. Частицы
+    m_impl->particleSystem->update(m_impl->registry, dt);
+
+    // 4. Физика (коллизии)
     m_impl->physicsWorld->update(
         m_impl->registry,
         dt,
