@@ -1,7 +1,5 @@
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <stdexcept>
 #include <unordered_map>
 
 #include <glad/glad.h>

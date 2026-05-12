@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cstring>
 
 #include <GLFW/glfw3.h>
