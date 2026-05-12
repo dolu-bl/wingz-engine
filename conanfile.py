@@ -11,8 +11,6 @@ class WingzEngineConanFile(ConanFile):
     def requirements(self):
         self.requires("glfw/3.3.8")
         self.requires("entt/3.12.2")
-        self.requires("imgui/1.90.4")
-        self.requires("stb/cci.20230920")
         self.requires("spdlog/1.12.0")
 
     def layout(self):
