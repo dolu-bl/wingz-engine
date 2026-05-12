@@ -40,6 +40,10 @@ public:
     /// Клиент: применить полученное состояние мира.
     void clientReceive(entt::registry& registry, const Message& msg);
 
+    /// Клиент: десериализовать WorldState в список состояний.
+    /// Используется совместно с ClientInterpolation.
+    std::vector<SerializedEntityState> deserializeWorldState(const Message& msg) const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

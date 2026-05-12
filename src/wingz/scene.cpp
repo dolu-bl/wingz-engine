@@ -67,12 +67,25 @@ void Scene::render(gfx::SpriteBatch& batch)
         const auto& transform = view.get<const ecs::Transform>(entity);
         const auto& sprite = view.get<const ecs::Sprite>(entity);
 
+        // Используем интерполированную позицию, если есть
+        float renderX = transform.x;
+        float renderY = transform.y;
+        float renderRot = transform.rot;
+
+        const auto* itransform = m_impl->registry.try_get<ecs::InterpolatedTransform>(entity);
+        if (itransform)
+        {
+            renderX = itransform->x;
+            renderY = itransform->y;
+            renderRot = itransform->rot;
+        }
+
         gfx::SpriteDesc desc;
-        desc.x = transform.x;
-        desc.y = transform.y;
+        desc.x = renderX;
+        desc.y = renderY;
         desc.sx = sprite.width;
         desc.sy = sprite.height;
-        desc.rot = transform.rot;
+        desc.rot = renderRot;
         desc.u0 = sprite.u0;
         desc.v0 = sprite.v0;
         desc.u1 = sprite.u1;

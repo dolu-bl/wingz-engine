@@ -20,6 +20,7 @@ add_library(wingz STATIC
     wingz/input/input_manager.cpp
     wingz/input/action_map.cpp
     wingz/physics/physics_world.cpp
+    wingz/net/client_interpolation.cpp
     wingz/net/connection.cpp
     wingz/net/host.cpp
     wingz/net/replication.cpp

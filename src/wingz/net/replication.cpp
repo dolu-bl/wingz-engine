@@ -115,37 +115,98 @@ void ReplicationSystem::clientReceive(
     const Message& msg
 )
 {
-    if (msg.header.type != MessageType::WorldState)
+    auto states = deserializeWorldState(msg);
+    if (states.empty())
         return;
+
+    auto view = registry.view<Networked, ecs::Transform, ecs::Velocity, ecs::Sprite>();
+
+    for (const auto& st : states)
+    {
+        entt::entity found = entt::null;
+
+        for (auto entity : view)
+        {
+            const auto& net = view.get<const Networked>(entity);
+            if (net.netId == st.netId)
+            {
+                found = entity;
+                break;
+            }
+        }
+
+        if (found != entt::null)
+        {
+            auto& transform = view.get<ecs::Transform>(found);
+            auto& velocity = view.get<ecs::Velocity>(found);
+            auto& sprite = view.get<ecs::Sprite>(found);
+
+            transform.x = st.x;
+            transform.y = st.y;
+            transform.rot = st.rot;
+            velocity.dx = st.vx;
+            velocity.dy = st.vy;
+            velocity.drot = st.drot;
+            sprite.r = st.r;
+            sprite.g = st.g;
+            sprite.b = st.b;
+            sprite.a = st.a;
+
+            auto* player = registry.try_get<ecs::Player>(found);
+            if (player)
+                player->id = st.playerId;
+        }
+        else
+        {
+            auto entity = registry.create();
+            registry.emplace<Networked>(entity, st.netId, 0);
+            registry.emplace<ecs::Transform>(entity, st.x, st.y, st.rot);
+            registry.emplace<ecs::Velocity>(entity, st.vx, st.vy, st.drot);
+            registry.emplace<ecs::Sprite>(
+                entity, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 48.0f, 48.0f,
+                st.r, st.g, st.b, st.a
+            );
+            registry.emplace<ecs::Player>(entity, static_cast<uint32_t>(st.playerId));
+            registry.emplace<ecs::InputIntent>(entity, 0.0f, 0.0f, false);
+
+            const std::string tag = (st.playerId == 0)
+                ? "ServerPlayer"
+                : "ClientPlayer";
+            registry.emplace<ecs::Tag>(entity, tag);
+        }
+    }
+}
+
+std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
+    const Message& msg
+) const
+{
+    std::vector<SerializedEntityState> states;
+
+    if (msg.header.type != MessageType::WorldState)
+        return states;
 
     Serializer ser(msg.data);
 
     if (ser.remainingBytes() < sizeof(uint32_t))
-    {
-        spdlog::warn("ReplicationSystem::clientReceive: сообщение слишком короткое");
-        return;
-    }
+        return states;
 
     uint32_t count = ser.readU32();
 
-    // Проверяем, что данных хватает на все сущности
     const size_t expectedBytes = count * (sizeof(uint32_t) // netId
                                           + sizeof(uint8_t) // playerId
-                                          + sizeof(float) * 10 // 10 полей float
-                                 );
+                                          + sizeof(float) * 10);
 
     if (ser.remainingBytes() < expectedBytes)
     {
         spdlog::warn(
-            "ReplicationSystem::clientReceive: ожидалось {} байт, но осталось {}",
+            "ReplicationSystem::deserializeWorldState: ожидалось {} байт, осталось {}",
             expectedBytes,
             ser.remainingBytes()
         );
-        return;
+        return states;
     }
 
-    // Читаем состояния
-    std::vector<SerializedEntityState> states;
     states.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i)
@@ -167,67 +228,7 @@ void ReplicationSystem::clientReceive(
         states.push_back(st);
     }
 
-    // Применяем состояния к локальным сущностям
-    auto view = registry.view<Networked, ecs::Transform, ecs::Velocity, ecs::Sprite>();
-
-    for (const auto& st : states)
-    {
-        entt::entity found = entt::null;
-
-        // Ищем существующую сущность по netId
-        for (auto entity : view)
-        {
-            const auto& net = view.get<const Networked>(entity);
-            if (net.netId == st.netId)
-            {
-                found = entity;
-                break;
-            }
-        }
-
-        if (found != entt::null)
-        {
-            // Обновляем существующую
-            auto& transform = view.get<ecs::Transform>(found);
-            auto& velocity = view.get<ecs::Velocity>(found);
-            auto& sprite = view.get<ecs::Sprite>(found);
-
-            transform.x = st.x;
-            transform.y = st.y;
-            transform.rot = st.rot;
-            velocity.dx = st.vx;
-            velocity.dy = st.vy;
-            velocity.drot = st.drot;
-            sprite.r = st.r;
-            sprite.g = st.g;
-            sprite.b = st.b;
-            sprite.a = st.a;
-
-            // Обновляем Player, если компонент есть
-            auto* player = registry.try_get<ecs::Player>(found);
-            if (player)
-                player->id = st.playerId;
-        }
-        else
-        {
-            // Создаём новую сущность
-            auto entity = registry.create();
-            registry.emplace<Networked>(entity, st.netId, 0);
-            registry.emplace<ecs::Transform>(entity, st.x, st.y, st.rot);
-            registry.emplace<ecs::Velocity>(entity, st.vx, st.vy, st.drot);
-            registry.emplace<ecs::Sprite>(
-                entity, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 48.0f, 48.0f,
-                st.r, st.g, st.b, st.a
-            );
-            registry.emplace<ecs::Player>(entity, static_cast<uint32_t>(st.playerId));
-            registry.emplace<ecs::InputIntent>(entity, 0.0f, 0.0f, false);
-
-            const std::string tag = (st.playerId == 0)
-                ? "ServerPlayer"
-                : "ClientPlayer";
-            registry.emplace<ecs::Tag>(entity, tag);
-        }
-    }
+    return states;
 }
 
 } // namespace wingz::net
