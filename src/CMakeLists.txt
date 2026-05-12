@@ -19,6 +19,7 @@ add_library(wingz STATIC
     wingz/gfx/debug_ui.cpp
     wingz/input/input_manager.cpp
     wingz/input/action_map.cpp
+    wingz/physics/physics_world.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/glad/src/glad.c
     ${IMGUI_SOURCES}
 )

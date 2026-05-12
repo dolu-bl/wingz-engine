@@ -1,9 +1,12 @@
+#include <spdlog/spdlog.h>
+
 #include "wingz/scene.h"
 
 #include "wingz/ecs/components.h"
 #include "wingz/ecs/systems.h"
 #include "wingz/gfx/camera.h"
 #include "wingz/gfx/sprite_batch.h"
+#include "wingz/physics/physics_world.h"
 
 namespace wingz
 {
@@ -12,18 +15,19 @@ struct Scene::Impl
 {
     entt::registry registry;
     gfx::Camera camera;
+    std::unique_ptr<physics::PhysicsWorld> physicsWorld;
 };
 
 Scene::Scene()
     : m_impl(std::make_unique<Impl>())
 {
+    m_impl->physicsWorld = std::make_unique<physics::PhysicsWorld>();
 }
 
 Scene::~Scene() = default;
 
 void Scene::init()
 {
-    // Настраиваем камеру (будет переопределено при ресайзе)
     m_impl->camera.left = 0.0f;
     m_impl->camera.right = 1280.0f;
     m_impl->camera.bottom = 720.0f;
@@ -32,7 +36,25 @@ void Scene::init()
 
 void Scene::update(float dt)
 {
+    // 1. Ввод
+    ecs::inputSystem(m_impl->registry);
+
+    // 2. Движение
     ecs::movementSystem(m_impl->registry, dt);
+
+    // 3. Физика (коллизии)
+    m_impl->physicsWorld->update(
+        m_impl->registry,
+        dt,
+        [](const physics::CollisionEvent& event)
+        {
+            spdlog::debug(
+                "Коллизия: entity {} vs entity {}",
+                static_cast<uint32_t>(event.entityA),
+                static_cast<uint32_t>(event.entityB)
+            );
+        }
+    );
 }
 
 void Scene::render(gfx::SpriteBatch& batch)

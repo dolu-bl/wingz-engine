@@ -1,6 +1,3 @@
-#include <algorithm>
-#include <cmath>
-
 #include "wingz/gfx/camera.h"
 
 namespace wingz::gfx

@@ -45,4 +45,12 @@ struct Player
     uint8_t id = 0;
 };
 
+/// Входной компонент (направление движения).
+struct InputIntent
+{
+    float moveX = 0.0f; // -1, 0, +1
+    float moveY = 0.0f;
+    bool fire = false;
+};
+
 } // namespace wingz::ecs
