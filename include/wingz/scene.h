@@ -13,7 +13,9 @@ namespace gfx
 {
 class SpriteBatch;
 class Camera;
+class CameraController;
 }
+
 namespace ecs
 {
 class ParticleSystem;
@@ -47,6 +49,9 @@ public:
 
     /// Установить коллбэк при попадании пули (для сети).
     void setHitCallback(std::function<void(float x, float y)> callback);
+
+    /// Получить контроллер камеры.
+    gfx::CameraController& cameraController();
 
 private:
     struct Impl;

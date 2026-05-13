@@ -20,7 +20,6 @@ void ActionMap::update(const InputSnapshot& snapshot)
     {
         bool active = false;
 
-        // Клавиша активна если Held ИЛИ Pressed
         for (auto key : entry.binding.keys)
         {
             auto state = snapshot.keys[static_cast<size_t>(key)];
@@ -44,12 +43,11 @@ void ActionMap::update(const InputSnapshot& snapshot)
             }
         }
 
-        // Вызываем колбэк при переходе false→true
-        if (active && !entry.wasActive)
+        // Вызываем коллбэк, пока действие активно (для удержания)
+        if (active && entry.onPressed)
         {
-            spdlog::debug("Действие '{}' активировано", name);
-            if (entry.onPressed)
-                entry.onPressed();
+            spdlog::debug("Действие '{}' активно", name);
+            entry.onPressed();
         }
 
         entry.wasActive = active;

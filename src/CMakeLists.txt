@@ -14,6 +14,7 @@ add_library(wingz STATIC
     wingz/ecs/particle_system.cpp
     wingz/gfx/shader.cpp
     wingz/gfx/camera.cpp
+    wingz/gfx/camera_controller.cpp
     wingz/gfx/sprite_batch.cpp
     wingz/gfx/texture.cpp
     wingz/gfx/texture_atlas.cpp
