@@ -7,7 +7,6 @@
 #include "wingz/ecs/particle.h"
 #include "wingz/ecs/particle_system.h"
 #include "wingz/ecs/systems.h"
-#include "wingz/gfx/camera.h"
 #include "wingz/gfx/camera_controller.h"
 #include "wingz/gfx/sprite_batch.h"
 #include "wingz/net/replication.h"

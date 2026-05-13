@@ -11,6 +11,7 @@ add_library(wingz STATIC
     wingz/app.cpp
     wingz/scene.cpp
     wingz/window.cpp
+    wingz/core/timer.cpp
     wingz/ecs/particle_system.cpp
     wingz/gfx/shader.cpp
     wingz/gfx/camera.cpp
