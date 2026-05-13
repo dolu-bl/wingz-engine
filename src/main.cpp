@@ -12,6 +12,7 @@
 #include <spdlog/spdlog.h>
 
 #include <wingz/app.h>
+#include <wingz/core/timer.h>
 #include <wingz/ecs/components.h>
 #include <wingz/ecs/particle.h>
 #include <wingz/ecs/particle_system.h>
@@ -234,12 +235,20 @@ protected:
         if (snap.keys[static_cast<size_t>(wingz::input::Key::S)] >= wingz::input::InputState::Pressed)
             moveY += 1.0f;
 
-        // Тест: стрельба по пробелу
+        // Стрельба с задержкой
         if (snap.keys[static_cast<size_t>(wingz::input::Key::Space)]
-            == wingz::input::InputState::Pressed)
+            >= wingz::input::InputState::Pressed)
         {
-            sendShootEvent();
+            // Если таймер не запущен (первый выстрел) или время вышло
+            if (!m_shootCooldown.isRunning())
+            {
+                sendShootEvent();
+                m_shootCooldown.start(0.25f); // 4 выстрела в секунду
+            }
         }
+
+        // Обновляем таймер каждый кадр
+        m_shootCooldown.update(dt);
 
         // Тест: взрыв частиц по клику левой кнопкой мыши
         if (snap.mouseButtons[static_cast<size_t>(wingz::input::MouseButton::Left)]
@@ -837,6 +846,7 @@ private:
     wingz::input::ActionMap m_cameraActionMap;
 
     bool m_freeCamera = false;
+    wingz::core::Timer m_shootCooldown;
 };
 
 int main(int argc, char* argv[])
