@@ -8,6 +8,7 @@
 #include "wingz/ecs/particle_system.h"
 #include "wingz/ecs/systems.h"
 #include "wingz/gfx/camera.h"
+#include "wingz/gfx/camera_controller.h"
 #include "wingz/gfx/sprite_batch.h"
 #include "wingz/net/replication.h"
 #include "wingz/physics/physics_world.h"
@@ -18,7 +19,7 @@ namespace wingz
 struct Scene::Impl
 {
     entt::registry registry;
-    gfx::Camera camera;
+    std::unique_ptr<gfx::CameraController> cameraController;
     std::unique_ptr<physics::PhysicsWorld> physicsWorld;
     std::unique_ptr<ecs::ParticleSystem> particleSystem;
     std::function<void(float, float)> hitCallback;
@@ -27,6 +28,7 @@ struct Scene::Impl
 Scene::Scene()
     : m_impl(std::make_unique<Impl>())
 {
+    m_impl->cameraController = std::make_unique<gfx::CameraController>();
     m_impl->physicsWorld = std::make_unique<physics::PhysicsWorld>();
     m_impl->particleSystem = std::make_unique<ecs::ParticleSystem>();
 }
@@ -35,10 +37,7 @@ Scene::~Scene() = default;
 
 void Scene::init()
 {
-    m_impl->camera.left = 0.0f;
-    m_impl->camera.right = 1280.0f;
-    m_impl->camera.bottom = 720.0f;
-    m_impl->camera.top = 0.0f;
+    m_impl->cameraController->setWorldBounds(0.0f, 1280.0f, 0.0f, 720.0f);
 
     auto& reg = m_impl->registry;
 
@@ -147,7 +146,7 @@ void Scene::updateVisuals(float dt)
 
 void Scene::render(gfx::SpriteBatch& batch)
 {
-    batch.begin(m_impl->camera);
+    batch.begin(m_impl->cameraController->camera());
 
     auto view = m_impl->registry.view<const ecs::Transform, const ecs::Sprite>();
     for (auto entity : view)
@@ -198,6 +197,11 @@ entt::registry& Scene::registry()
 void Scene::setHitCallback(std::function<void(float x, float y)> callback)
 {
     m_impl->hitCallback = std::move(callback);
+}
+
+gfx::CameraController& Scene::cameraController()
+{
+    return *m_impl->cameraController;
 }
 
 } // namespace wingz

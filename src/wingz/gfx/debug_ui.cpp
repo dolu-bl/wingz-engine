@@ -7,6 +7,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include "wingz/gfx/debug_ui.h"
+
 namespace wingz::gfx
 {
 

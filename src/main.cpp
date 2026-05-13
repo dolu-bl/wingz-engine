@@ -16,6 +16,7 @@
 #include <wingz/ecs/particle.h>
 #include <wingz/ecs/particle_system.h>
 #include <wingz/gfx/camera.h>
+#include <wingz/gfx/camera_controller.h>
 #include <wingz/gfx/debug_ui.h>
 #include <wingz/gfx/sprite_batch.h>
 #include <wingz/gfx/texture.h>
@@ -138,6 +139,44 @@ protected:
             m_scene->registry().emplace<wingz::ecs::Tag>(emitterEntity, "SmokeEmitter");
         }
 
+        // Настройка управления камерой
+        // Свободный режим: UHJK + стрелки
+        m_cameraActionMap.addAction(
+            "CameraLeft",
+            wingz::input::InputBinding {
+                { wingz::input::Key::Left, wingz::input::Key::H },
+                {} },
+            [this]()
+            { m_scene->cameraController().moveLeft(); }
+        );
+
+        m_cameraActionMap.addAction(
+            "CameraRight",
+            wingz::input::InputBinding {
+                { wingz::input::Key::Right, wingz::input::Key::K },
+                {} },
+            [this]()
+            { m_scene->cameraController().moveRight(); }
+        );
+
+        m_cameraActionMap.addAction(
+            "CameraUp",
+            wingz::input::InputBinding {
+                { wingz::input::Key::Up, wingz::input::Key::U },
+                {} },
+            [this]()
+            { m_scene->cameraController().moveUp(); }
+        );
+
+        m_cameraActionMap.addAction(
+            "CameraDown",
+            wingz::input::InputBinding {
+                { wingz::input::Key::Down, wingz::input::Key::J },
+                {} },
+            [this]()
+            { m_scene->cameraController().moveDown(); }
+        );
+
         // ────────────────────────────────────────────
         // Сеть
         // ────────────────────────────────────────────
@@ -154,6 +193,9 @@ protected:
                 [this](float x, float y)
                 { sendHitEffect(x, y); }
             );
+
+            m_scene->cameraController().setWorldBounds(-500.0f, 1780.0f, -500.0f, 1220.0f);
+
             spdlog::info("Режим сервера");
         }
         else
@@ -277,6 +319,28 @@ protected:
             }
         }
 
+        // Переключение режима камеры по F1
+        if (snap.keys[static_cast<size_t>(wingz::input::Key::F1)]
+            == wingz::input::InputState::Pressed)
+        {
+            m_scene->cameraController().toggleMode();
+        }
+
+        // Обновление камеры
+        float targetX = 640.0f;
+        float targetY = 360.0f;
+
+        if (m_localPlayerEntity != entt::null
+            && m_scene->registry().valid(m_localPlayerEntity))
+        {
+            const auto& pt = m_scene->registry().get<wingz::ecs::Transform>(m_localPlayerEntity);
+            targetX = pt.x;
+            targetY = pt.y;
+        }
+
+        m_cameraActionMap.update(snap);
+        m_scene->cameraController().update(dt, targetX, targetY);
+
         // ────────────────────────────────────────────
         // Рендер
         // ────────────────────────────────────────────
@@ -327,6 +391,13 @@ protected:
         auto healthView = m_scene->registry().view<wingz::ecs::Health>();
         ImGui::Text("Bullets: %zu", bulletView.size());
         ImGui::Text("Destructible objects: %zu", healthView.size());
+
+        bool following = m_scene->cameraController().isFollowing();
+        ImGui::Text("Camera: %s (F1 to switch)", following ? "Follow" : "Free");
+        if (!following)
+        {
+            ImGui::Text("Free cam: UHJK / Arrows");
+        }
 
         ImGui::End();
         m_debugUI->endFrame();
@@ -762,6 +833,10 @@ private:
     std::unique_ptr<wingz::Scene> m_scene;
     std::unique_ptr<wingz::net::Host> m_host;
     std::unique_ptr<wingz::net::ReplicationSystem> m_replication;
+
+    wingz::input::ActionMap m_cameraActionMap;
+
+    bool m_freeCamera = false;
 };
 
 int main(int argc, char* argv[])
