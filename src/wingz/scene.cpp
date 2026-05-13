@@ -2,6 +2,7 @@
 
 #include "wingz/scene.h"
 
+#include "wingz/ecs/combat_systems.h"
 #include "wingz/ecs/components.h"
 #include "wingz/ecs/particle.h"
 #include "wingz/ecs/particle_system.h"
@@ -78,20 +79,26 @@ void Scene::update(float dt)
     m_impl->physicsWorld->update(
         m_impl->registry,
         dt,
-        [](const physics::CollisionEvent& event)
+        [this](const physics::CollisionEvent& event)
         {
             spdlog::debug(
                 "Коллизия: entity {} vs entity {}",
                 static_cast<uint32_t>(event.entityA),
                 static_cast<uint32_t>(event.entityB)
             );
+
+            // Обрабатываем урон от пуль
+            ecs::damageSystem(m_impl->registry, event);
         }
     );
+
+    // 5. Система смерти (после физики)
+    ecs::deathSystem(m_impl->registry, dt);
 }
 
 void Scene::updateVisuals(float dt)
 {
-    // Двигаем только частицы (у них есть компонент Particle)
+    // Двигаем частицы
     auto moveView = m_impl->registry.view<ecs::Particle, ecs::Transform, ecs::Velocity>();
     for (auto entity : moveView)
     {
@@ -107,8 +114,11 @@ void Scene::updateVisuals(float dt)
         velocity.dy *= 0.98f;
     }
 
-    // Обновляем эмиттеры, время жизни, цвет, размер
+    // Обновляем эмиттеры, время жизни частиц
     m_impl->particleSystem->update(m_impl->registry, dt);
+
+    // Система смерти (удаление мёртвых сущностей с истекшим таймером)
+    ecs::deathSystem(m_impl->registry, dt);
 }
 
 void Scene::render(gfx::SpriteBatch& batch)
