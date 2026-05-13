@@ -45,6 +45,9 @@ public:
 
     entt::registry& registry();
 
+    /// Установить коллбэк при попадании пули (для сети).
+    void setHitCallback(std::function<void(float x, float y)> callback);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

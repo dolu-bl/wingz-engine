@@ -21,6 +21,7 @@ struct Scene::Impl
     gfx::Camera camera;
     std::unique_ptr<physics::PhysicsWorld> physicsWorld;
     std::unique_ptr<ecs::ParticleSystem> particleSystem;
+    std::function<void(float, float)> hitCallback;
 };
 
 Scene::Scene()
@@ -86,6 +87,22 @@ void Scene::update(float dt)
                 static_cast<uint32_t>(event.entityA),
                 static_cast<uint32_t>(event.entityB)
             );
+
+            // Если попали по стене — сообщаем об этом
+            if (m_impl->hitCallback)
+            {
+                bool bulletA = m_impl->registry.try_get<ecs::Bullet>(event.entityA);
+                bool bulletB = m_impl->registry.try_get<ecs::Bullet>(event.entityB);
+
+                if (bulletA || bulletB)
+                {
+                    // Получаем позицию цели
+                    entt::entity target = bulletA ? event.entityB : event.entityA;
+                    const auto* transform = m_impl->registry.try_get<ecs::Transform>(target);
+                    if (transform)
+                        m_impl->hitCallback(transform->x, transform->y);
+                }
+            }
 
             // Обрабатываем урон от пуль
             ecs::damageSystem(m_impl->registry, event);
@@ -176,6 +193,11 @@ void Scene::render(gfx::SpriteBatch& batch)
 entt::registry& Scene::registry()
 {
     return m_impl->registry;
+}
+
+void Scene::setHitCallback(std::function<void(float x, float y)> callback)
+{
+    m_impl->hitCallback = std::move(callback);
 }
 
 } // namespace wingz

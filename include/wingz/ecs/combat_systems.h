@@ -46,40 +46,6 @@ inline void damageSystem(
     if (health)
     {
         health->current -= bullet->damage;
-
-        const auto* targetTransform = registry.try_get<Transform>(targetEntity);
-        if (targetTransform)
-        {
-            ParticleEmitter debrisEmitter;
-            debrisEmitter.baseLifetime = 0.4f;
-            debrisEmitter.lifetimeVariance = 0.2f;
-            debrisEmitter.baseSpeed = 150.0f;
-            debrisEmitter.speedVariance = 80.0f;
-            debrisEmitter.spreadAngle = 3.14159265f;
-            debrisEmitter.baseAngle = 0.0f;
-            debrisEmitter.startR = 0.8f;
-            debrisEmitter.startG = 0.3f;
-            debrisEmitter.startB = 0.3f;
-            debrisEmitter.startA = 1.0f;
-            debrisEmitter.endR = 0.6f;
-            debrisEmitter.endG = 0.2f;
-            debrisEmitter.endB = 0.2f;
-            debrisEmitter.endA = 0.0f;
-            debrisEmitter.startWidth = 6.0f;
-            debrisEmitter.startHeight = 6.0f;
-            debrisEmitter.endWidth = 2.0f;
-            debrisEmitter.endHeight = 2.0f;
-            debrisEmitter.fadeOut = true;
-            debrisEmitter.flicker = true;
-            debrisEmitter.particleType = Particle::Type::Spark;
-
-            ParticleSystem::emitBurst(
-                registry,
-                targetTransform->x, targetTransform->y,
-                debrisEmitter,
-                12
-            );
-        }
     }
 
     registry.destroy(bulletEntity);

@@ -34,6 +34,7 @@ enum class MessageType : uint8_t
 
     // Эффекты
     ParticleBurst,
+    HitEffect,
 
     // Служебные
     Ping,

@@ -148,6 +148,12 @@ protected:
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
             m_localPlayerEntity = createPlayer(0);
             createWalls();
+
+            // Коллбэк при попадании — рассылаем HitEffect
+            m_scene->setHitCallback(
+                [this](float x, float y)
+                { sendHitEffect(x, y); }
+            );
             spdlog::info("Режим сервера");
         }
         else
@@ -570,6 +576,20 @@ private:
                     m_host->broadcast(e.message, false, e.peerId);
                 }
             }
+            else if (e.message.header.type == wingz::net::MessageType::HitEffect)
+            {
+                // Только клиент создаёт частицы по этому сообщению
+                if (!m_isServer)
+                {
+                    wingz::net::Serializer ser(e.message.data);
+                    if (ser.remainingBytes() >= sizeof(float) * 2)
+                    {
+                        float x = ser.readF32();
+                        float y = ser.readF32();
+                        spawnHitParticles(x, y);
+                    }
+                }
+            }
             break;
         }
         default:
@@ -607,6 +627,39 @@ private:
             x, y,
             explosionEmitter,
             30
+        );
+    }
+
+    void spawnHitParticles(float x, float y)
+    {
+        wingz::ecs::ParticleEmitter debrisEmitter;
+        debrisEmitter.baseLifetime = 0.4f;
+        debrisEmitter.lifetimeVariance = 0.2f;
+        debrisEmitter.baseSpeed = 150.0f;
+        debrisEmitter.speedVariance = 80.0f;
+        debrisEmitter.spreadAngle = 3.14159265f;
+        debrisEmitter.baseAngle = 0.0f;
+        debrisEmitter.startR = 0.8f;
+        debrisEmitter.startG = 0.3f;
+        debrisEmitter.startB = 0.3f;
+        debrisEmitter.startA = 1.0f;
+        debrisEmitter.endR = 0.6f;
+        debrisEmitter.endG = 0.2f;
+        debrisEmitter.endB = 0.2f;
+        debrisEmitter.endA = 0.0f;
+        debrisEmitter.startWidth = 6.0f;
+        debrisEmitter.startHeight = 6.0f;
+        debrisEmitter.endWidth = 2.0f;
+        debrisEmitter.endHeight = 2.0f;
+        debrisEmitter.fadeOut = true;
+        debrisEmitter.flicker = true;
+        debrisEmitter.particleType = wingz::ecs::Particle::Type::Spark;
+
+        wingz::ecs::ParticleSystem::emitBurst(
+            m_scene->registry(),
+            x, y,
+            debrisEmitter,
+            12
         );
     }
 
@@ -671,6 +724,26 @@ private:
         // Регистрируем для репликации
         if (m_replication)
             m_replication->registerEntity(m_scene->registry(), bullet);
+    }
+
+    void sendHitEffect(float x, float y)
+    {
+        if (!m_host || !m_host->isRunning() || !m_isServer)
+            return;
+
+        // Сервер создаёт частицы локально
+        spawnHitParticles(x, y);
+
+        // Рассылаем клиентам
+        wingz::net::Message msg;
+        msg.header.type = wingz::net::MessageType::HitEffect;
+        msg.header.tick = m_networkTick;
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeF32(x);
+        ser.writeF32(y);
+
+        m_host->broadcast(msg, false);
     }
 
     // Интерполяция
