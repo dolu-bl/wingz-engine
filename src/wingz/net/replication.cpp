@@ -13,6 +13,7 @@ namespace wingz::net
 struct ReplicationSystem::Impl
 {
     NetEntityId nextNetId = 1;
+    std::vector<SerializedEntityState> stateBuffer;
 };
 
 ReplicationSystem::ReplicationSystem()
@@ -48,42 +49,67 @@ void ReplicationSystem::serverUpdate(
     TickNumber tick
 )
 {
-    // Собираем состояния сущностей
-    std::vector<SerializedEntityState> states;
+    auto& states = m_impl->stateBuffer;
+    states.clear();
 
-    auto view = registry.view<
-        const Networked,
-        const ecs::Transform,
-        const ecs::Velocity,
-        const ecs::Sprite,
-        const ecs::Player>();
+    // Собираем ВСЕ сущности с Networked и Sprite
+    // Игроки имеют Player+Velocity, стены — нет
+    auto view = registry.view<const Networked, const ecs::Transform, const ecs::Sprite>();
 
     for (auto entity : view)
     {
         const auto& net = view.get<const Networked>(entity);
         const auto& transform = view.get<const ecs::Transform>(entity);
-        const auto& velocity = view.get<const ecs::Velocity>(entity);
         const auto& sprite = view.get<const ecs::Sprite>(entity);
-        const auto& player = view.get<const ecs::Player>(entity);
 
         SerializedEntityState st;
         st.netId = net.netId;
-        st.playerId = static_cast<uint8_t>(player.id);
+
+        // Игрок или стена?
+        const auto* player = registry.try_get<ecs::Player>(entity);
+        if (player)
+        {
+            st.playerId = static_cast<uint8_t>(player->id);
+            const auto& velocity = registry.get<ecs::Velocity>(entity);
+            st.vx = velocity.dx;
+            st.vy = velocity.dy;
+            st.drot = velocity.drot;
+        }
+        else
+        {
+            st.playerId = 0xFF;
+            st.vx = 0.0f;
+            st.vy = 0.0f;
+            st.drot = 0.0f;
+        }
+
         st.x = transform.x;
         st.y = transform.y;
         st.rot = transform.rot;
-        st.vx = velocity.dx;
-        st.vy = velocity.dy;
-        st.drot = velocity.drot;
         st.r = sprite.r;
         st.g = sprite.g;
         st.b = sprite.b;
         st.a = sprite.a;
+        st.width = sprite.width;
+        st.height = sprite.height;
+
+        // Здоровье
+        const auto* health = registry.try_get<ecs::Health>(entity);
+        if (health)
+        {
+            st.health = health->current;
+            st.maxHealth = health->max;
+        }
+        else
+        {
+            st.health = -1.0f;
+            st.maxHealth = -1.0f;
+        }
 
         states.push_back(st);
     }
 
-    // Сериализуем через Serializer
+    // Сериализация
     Message msg;
     msg.header.type = MessageType::WorldState;
     msg.header.tick = tick;
@@ -105,6 +131,10 @@ void ReplicationSystem::serverUpdate(
         ser.writeF32(st.g);
         ser.writeF32(st.b);
         ser.writeF32(st.a);
+        ser.writeF32(st.health);
+        ser.writeF32(st.maxHealth);
+        ser.writeF32(st.width);
+        ser.writeF32(st.height);
     }
 
     host.broadcast(msg, false);
@@ -119,16 +149,21 @@ void ReplicationSystem::clientReceive(
     if (states.empty())
         return;
 
+    // Собираем ID, которые есть в этом снапшоте
+    std::unordered_set<NetEntityId> receivedIds;
+    for (const auto& st : states)
+        receivedIds.insert(st.netId);
+
+    // Применяем состояния
     auto view = registry.view<Networked, ecs::Transform, ecs::Velocity, ecs::Sprite>();
 
     for (const auto& st : states)
     {
+        // Ищем существующую сущность
         entt::entity found = entt::null;
-
         for (auto entity : view)
         {
-            const auto& net = view.get<const Networked>(entity);
-            if (net.netId == st.netId)
+            if (view.get<Networked>(entity).netId == st.netId)
             {
                 found = entity;
                 break;
@@ -137,6 +172,7 @@ void ReplicationSystem::clientReceive(
 
         if (found != entt::null)
         {
+            // Обновляем
             auto& transform = view.get<ecs::Transform>(found);
             auto& velocity = view.get<ecs::Velocity>(found);
             auto& sprite = view.get<ecs::Sprite>(found);
@@ -151,30 +187,64 @@ void ReplicationSystem::clientReceive(
             sprite.g = st.g;
             sprite.b = st.b;
             sprite.a = st.a;
+            sprite.width = st.width;
+            sprite.height = st.height;
 
-            auto* player = registry.try_get<ecs::Player>(found);
-            if (player)
-                player->id = st.playerId;
+            // Здоровье
+            if (st.health >= 0.0f)
+            {
+                auto* health = registry.try_get<ecs::Health>(found);
+                if (health)
+                {
+                    health->current = st.health;
+                    health->max = st.maxHealth;
+                }
+                else
+                {
+                    registry.emplace<ecs::Health>(found, st.health, st.maxHealth);
+                }
+            }
         }
         else
         {
+            // Создаём новую
             auto entity = registry.create();
             registry.emplace<Networked>(entity, st.netId, 0);
             registry.emplace<ecs::Transform>(entity, st.x, st.y, st.rot);
             registry.emplace<ecs::Velocity>(entity, st.vx, st.vy, st.drot);
             registry.emplace<ecs::Sprite>(
-                entity, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 48.0f, 48.0f,
+                entity,
+                0u, 0.0f, 0.0f, 1.0f, 1.0f,
+                st.width, st.height,
                 st.r, st.g, st.b, st.a
             );
-            registry.emplace<ecs::Player>(entity, static_cast<uint32_t>(st.playerId));
-            registry.emplace<ecs::InputIntent>(entity, 0.0f, 0.0f, false);
 
-            const std::string tag = (st.playerId == 0)
-                ? "ServerPlayer"
-                : "ClientPlayer";
-            registry.emplace<ecs::Tag>(entity, tag);
+            if (st.playerId != 0xFF)
+            {
+                registry.emplace<ecs::Player>(entity, static_cast<uint32_t>(st.playerId));
+                registry.emplace<ecs::InputIntent>(entity, 0.0f, 0.0f, false);
+                registry.emplace<ecs::Tag>(entity, (st.playerId == 0) ? "ServerPlayer" : "ClientPlayer");
+            }
+            else
+            {
+                registry.emplace<ecs::Tag>(entity, "Wall");
+            }
+
+            if (st.health >= 0.0f)
+                registry.emplace<ecs::Health>(entity, st.health, st.maxHealth);
         }
     }
+
+    // Удаляем сущности, которых нет в снапшоте (уничтожены на сервере)
+    std::vector<entt::entity> toRemove;
+    for (auto entity : view)
+    {
+        if (receivedIds.find(view.get<Networked>(entity).netId) == receivedIds.end())
+            toRemove.push_back(entity);
+    }
+
+    for (auto entity : toRemove)
+        registry.destroy(entity);
 }
 
 std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
@@ -193,17 +263,15 @@ std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
 
     uint32_t count = ser.readU32();
 
-    const size_t expectedBytes = count * (sizeof(uint32_t) // netId
-                                          + sizeof(uint8_t) // playerId
-                                          + sizeof(float) * 10);
+    // 14 полей float: x, y, rot, vx, vy, drot, r, g, b, a, health, maxHealth, width, height
+    const size_t perEntityBytes = sizeof(uint32_t)
+        + sizeof(uint8_t)
+        + sizeof(float)
+            * 14;
 
-    if (ser.remainingBytes() < expectedBytes)
+    if (ser.remainingBytes() < count * perEntityBytes)
     {
-        spdlog::warn(
-            "ReplicationSystem::deserializeWorldState: ожидалось {} байт, осталось {}",
-            expectedBytes,
-            ser.remainingBytes()
-        );
+        spdlog::warn("ReplicationSystem: недостаточно данных в WorldState");
         return states;
     }
 
@@ -224,6 +292,10 @@ std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
         st.g = ser.readF32();
         st.b = ser.readF32();
         st.a = ser.readF32();
+        st.health = ser.readF32();
+        st.maxHealth = ser.readF32();
+        st.width = ser.readF32();
+        st.height = ser.readF32();
 
         states.push_back(st);
     }

@@ -15,7 +15,8 @@ namespace wingz::ecs
 /// Система урона: обрабатывает коллизии пуль со стенами/игроками.
 inline void damageSystem(
     entt::registry& registry,
-    const physics::CollisionEvent& event)
+    const physics::CollisionEvent& event
+)
 {
     auto* bulletA = registry.try_get<Bullet>(event.entityA);
     auto* bulletB = registry.try_get<Bullet>(event.entityB);
@@ -94,11 +95,8 @@ inline void deathSystem(entt::registry& registry, float dt)
         auto& health = healthView.get<Health>(entity);
         if (health.current <= 0.0f)
         {
-            auto* dead = registry.try_get<Dead>(entity);
-            if (!dead)
-            {
+            if (!registry.try_get<Dead>(entity))
                 registry.emplace<Dead>(entity, 0.5f);
-            }
         }
     }
 

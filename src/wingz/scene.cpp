@@ -104,20 +104,27 @@ void Scene::updateVisuals(float dt)
     {
         auto& transform = moveView.get<ecs::Transform>(entity);
         auto& velocity = moveView.get<ecs::Velocity>(entity);
-
         transform.x += velocity.dx * dt;
         transform.y += velocity.dy * dt;
         transform.rot = std::atan2(velocity.dy, velocity.dx);
-
-        // Затухание скорости
         velocity.dx *= 0.98f;
         velocity.dy *= 0.98f;
     }
 
-    // Обновляем эмиттеры, время жизни частиц
+    // Двигаем пули (Bullet) — они не Particle
+    auto bulletView = m_impl->registry.view<ecs::Bullet, ecs::Transform, ecs::Velocity>();
+    for (auto entity : bulletView)
+    {
+        auto& transform = bulletView.get<ecs::Transform>(entity);
+        auto& velocity = bulletView.get<ecs::Velocity>(entity);
+        transform.x += velocity.dx * dt;
+        transform.y += velocity.dy * dt;
+    }
+
+    // Обновляем эмиттеры и время жизни частиц
     m_impl->particleSystem->update(m_impl->registry, dt);
 
-    // Система смерти (удаление мёртвых сущностей с истекшим таймером)
+    // Система смерти
     ecs::deathSystem(m_impl->registry, dt);
 }
 

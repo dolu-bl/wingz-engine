@@ -4,6 +4,8 @@
 
 #include <entt/entt.hpp>
 
+#include <wingz/net/types.h>
+
 namespace wingz
 {
 

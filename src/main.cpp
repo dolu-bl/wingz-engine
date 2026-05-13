@@ -190,35 +190,7 @@ protected:
         if (snap.keys[static_cast<size_t>(wingz::input::Key::Space)]
             == wingz::input::InputState::Pressed)
         {
-            if (m_localPlayerEntity != entt::null
-                && m_scene->registry().valid(m_localPlayerEntity))
-            {
-                auto& playerTransform = m_scene->registry().get<wingz::ecs::Transform>(
-                    m_localPlayerEntity
-                );
-
-                // Создаём пулю
-                auto bullet = m_scene->registry().create();
-                m_scene->registry().emplace<wingz::ecs::Transform>(
-                    bullet, playerTransform.x, playerTransform.y - 20.0f, 0.0f
-                );
-                m_scene->registry().emplace<wingz::ecs::Velocity>(bullet, 0.0f, -500.0f, 0.0f);
-                m_scene->registry().emplace<wingz::ecs::Sprite>(
-                    bullet, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 8.0f, 12.0f,
-                    1.0f, 1.0f, 0.0f, 1.0f
-                ); // жёлтая пуля
-                m_scene->registry().emplace<wingz::ecs::Tag>(bullet, "Bullet");
-                m_scene->registry().emplace<wingz::ecs::Bullet>(
-                    bullet, 25.0f, m_localPlayerEntity
-                );
-                m_scene->registry().emplace<wingz::physics::Collider>(
-                    bullet,
-                    wingz::physics::AABB { 0, 0, 4, 6 },
-                    wingz::physics::CollisionLayer::PlayerBullet,
-                    wingz::physics::CollisionLayer::Wall,
-                    false, false
-                );
-            }
+            sendShootEvent();
         }
 
         // Тест: взрыв частиц по клику левой кнопкой мыши
@@ -524,7 +496,7 @@ private:
                         uint32_t tick = ser.readU32();
                         float mx = ser.readF32();
                         float my = ser.readF32();
-                        /* bool fire = */ ser.readU8();
+                        uint8_t fire = ser.readU8();
 
                         auto v = m_scene->registry().view<wingz::ecs::Player, wingz::ecs::InputIntent>();
                         for (auto en : v)
@@ -533,6 +505,15 @@ private:
                             {
                                 v.get<wingz::ecs::InputIntent>(en).moveX = mx;
                                 v.get<wingz::ecs::InputIntent>(en).moveY = my;
+
+                                if (fire)
+                                {
+                                    // Временно сохраняем localPlayerEntity для spawnBullet
+                                    auto savedLocal = m_localPlayerEntity;
+                                    m_localPlayerEntity = en;
+                                    spawnBullet();
+                                    m_localPlayerEntity = savedLocal;
+                                }
                                 break;
                             }
                         }
@@ -627,6 +608,69 @@ private:
             explosionEmitter,
             30
         );
+    }
+
+    void sendShootEvent()
+    {
+        if (!m_host || !m_host->isRunning())
+            return;
+
+        wingz::net::Message msg;
+        msg.header.type = wingz::net::MessageType::InputState; // можно завести отдельный тип
+        msg.header.tick = m_networkTick;
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeU32(m_networkTick);
+        ser.writeF32(0.0f); // moveX не используется
+        ser.writeF32(0.0f); // moveY не используется
+        ser.writeU8(1); // fire = true
+
+        if (m_isServer)
+        {
+            // Сервер сразу создаёт пулю
+            spawnBullet();
+            // И рассылает событие клиентам (опционально)
+        }
+        else
+        {
+            m_host->send(0, msg, false);
+        }
+    }
+
+    void spawnBullet()
+    {
+        if (m_localPlayerEntity == entt::null
+            || !m_scene->registry().valid(m_localPlayerEntity))
+            return;
+
+        auto& playerTransform = m_scene->registry().get<wingz::ecs::Transform>(
+            m_localPlayerEntity
+        );
+
+        auto bullet = m_scene->registry().create();
+        m_scene->registry().emplace<wingz::ecs::Transform>(
+            bullet, playerTransform.x, playerTransform.y - 20.0f, 0.0f
+        );
+        m_scene->registry().emplace<wingz::ecs::Velocity>(bullet, 0.0f, -500.0f, 0.0f);
+        m_scene->registry().emplace<wingz::ecs::Sprite>(
+            bullet, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 8.0f, 12.0f,
+            1.0f, 1.0f, 0.0f, 1.0f
+        );
+        m_scene->registry().emplace<wingz::ecs::Tag>(bullet, "Bullet");
+        m_scene->registry().emplace<wingz::ecs::Bullet>(
+            bullet, 25.0f, m_localPlayerEntity
+        );
+        m_scene->registry().emplace<wingz::physics::Collider>(
+            bullet,
+            wingz::physics::AABB { 0, 0, 4, 6 },
+            wingz::physics::CollisionLayer::PlayerBullet,
+            wingz::physics::CollisionLayer::Wall,
+            false, false
+        );
+
+        // Регистрируем для репликации
+        if (m_replication)
+            m_replication->registerEntity(m_scene->registry(), bullet);
     }
 
     // Интерполяция
