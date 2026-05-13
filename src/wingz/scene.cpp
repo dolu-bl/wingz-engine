@@ -8,6 +8,7 @@
 #include "wingz/ecs/systems.h"
 #include "wingz/gfx/camera.h"
 #include "wingz/gfx/sprite_batch.h"
+#include "wingz/net/replication.h"
 #include "wingz/physics/physics_world.h"
 
 namespace wingz
@@ -36,6 +37,30 @@ void Scene::init()
     m_impl->camera.right = 1280.0f;
     m_impl->camera.bottom = 720.0f;
     m_impl->camera.top = 0.0f;
+
+    auto& reg = m_impl->registry;
+
+    // Резервируем сущности
+    reg.storage<entt::entity>().reserve(4096);
+
+    // Часто создаваемые/удаляемые компоненты — частицы, пули
+    reg.storage<ecs::Transform>().reserve(2048);
+    reg.storage<ecs::Velocity>().reserve(2048);
+    reg.storage<ecs::Sprite>().reserve(2048);
+    reg.storage<ecs::Particle>().reserve(2048);
+    reg.storage<ecs::Tag>().reserve(2048);
+
+    // Сетевые компоненты
+    reg.storage<net::Networked>().reserve(256);
+    reg.storage<ecs::Player>().reserve(256);
+    reg.storage<ecs::InputIntent>().reserve(256);
+    reg.storage<ecs::InterpolatedTransform>().reserve(256);
+
+    // Физика
+    reg.storage<physics::Collider>().reserve(512);
+
+    // Редкие компоненты
+    reg.storage<ecs::ParticleEmitter>().reserve(64);
 }
 
 void Scene::update(float dt)
