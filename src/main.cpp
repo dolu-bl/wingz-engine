@@ -148,6 +148,12 @@ protected:
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
             m_localPlayerEntity = createPlayer(0);
             createWalls();
+
+            // Коллбэк при попадании — рассылаем HitEffect
+            m_scene->setHitCallback(
+                [this](float x, float y)
+                { sendHitEffect(x, y); }
+            );
             spdlog::info("Режим сервера");
         }
         else
@@ -185,6 +191,13 @@ protected:
             moveY -= 1.0f;
         if (snap.keys[static_cast<size_t>(wingz::input::Key::S)] >= wingz::input::InputState::Pressed)
             moveY += 1.0f;
+
+        // Тест: стрельба по пробелу
+        if (snap.keys[static_cast<size_t>(wingz::input::Key::Space)]
+            == wingz::input::InputState::Pressed)
+        {
+            sendShootEvent();
+        }
 
         // Тест: взрыв частиц по клику левой кнопкой мыши
         if (snap.mouseButtons[static_cast<size_t>(wingz::input::MouseButton::Left)]
@@ -309,6 +322,12 @@ protected:
         auto emitterView = m_scene->registry().view<wingz::ecs::ParticleEmitter>();
         ImGui::Text("Emitters active: %zu", emitterView.size());
 
+        // Статистика боя
+        auto bulletView = m_scene->registry().view<wingz::ecs::Bullet>();
+        auto healthView = m_scene->registry().view<wingz::ecs::Health>();
+        ImGui::Text("Bullets: %zu", bulletView.size());
+        ImGui::Text("Destructible objects: %zu", healthView.size());
+
         ImGui::End();
         m_debugUI->endFrame();
 
@@ -353,28 +372,51 @@ private:
 
     void createWalls()
     {
-        auto makeWall = [this](float x, float y, float w, float h, const char* tag)
+        auto makeWall = [this](float x, float y, float w, float h, const char* tag, bool destructible)
         {
             auto e = m_scene->registry().create();
             m_scene->registry().emplace<wingz::ecs::Transform>(e, x, y, 0);
             m_scene->registry().emplace<wingz::ecs::Sprite>(
-                e, 0u, 0, 0, 1, 1, w, h, 0.8f, 0.3f, 0.3f, 1
+                e, 0u, 0, 0, 1, 1, w, h,
+                destructible ? 0.6f : 0.8f, // R: разрушаемые чуть темнее
+                destructible ? 0.4f : 0.3f, // G
+                destructible ? 0.2f : 0.3f, // B
+                1.0f
             );
             m_scene->registry().emplace<wingz::ecs::Tag>(e, tag);
             m_scene->registry().emplace<wingz::physics::Collider>(
                 e,
                 wingz::physics::AABB { 0, 0, w * 0.5f, h * 0.5f },
                 wingz::physics::CollisionLayer::Wall,
-                wingz::physics::CollisionLayer::Player,
-                false, true
+                wingz::physics::CollisionLayer::Player
+                    | wingz::physics::CollisionLayer::PlayerBullet,
+                false,
+                true // статик
             );
+
+            // Разрушаемые стены получают здоровье
+            if (destructible)
+            {
+                m_scene->registry().emplace<wingz::ecs::Health>(
+                    e, 100.0f, 100.0f
+                );
+            }
+
             if (m_replication)
                 m_replication->registerEntity(m_scene->registry(), e);
         };
-        makeWall(640, 16, 1280, 32, "WallT");
-        makeWall(640, 704, 1280, 32, "WallB");
-        makeWall(16, 360, 32, 720, "WallL");
-        makeWall(1264, 360, 32, 720, "WallR");
+
+        // Внешние стены — неразрушимые
+        makeWall(640, 16, 1280, 32, "WallT", false);
+        makeWall(640, 704, 1280, 32, "WallB", false);
+        makeWall(16, 360, 32, 720, "WallL", false);
+        makeWall(1264, 360, 32, 720, "WallR", false);
+
+        // Внутренние разрушаемые стены для теста
+        makeWall(400, 300, 32, 120, "DestructibleWall1", true);
+        makeWall(600, 400, 120, 32, "DestructibleWall2", true);
+        makeWall(800, 250, 32, 100, "DestructibleWall3", true);
+        makeWall(350, 500, 100, 32, "DestructibleWall4", true);
     }
 
     void sendInputToServer(float mx, float my)
@@ -460,7 +502,7 @@ private:
                         uint32_t tick = ser.readU32();
                         float mx = ser.readF32();
                         float my = ser.readF32();
-                        /* bool fire = */ ser.readU8();
+                        uint8_t fire = ser.readU8();
 
                         auto v = m_scene->registry().view<wingz::ecs::Player, wingz::ecs::InputIntent>();
                         for (auto en : v)
@@ -469,6 +511,15 @@ private:
                             {
                                 v.get<wingz::ecs::InputIntent>(en).moveX = mx;
                                 v.get<wingz::ecs::InputIntent>(en).moveY = my;
+
+                                if (fire)
+                                {
+                                    // Временно сохраняем localPlayerEntity для spawnBullet
+                                    auto savedLocal = m_localPlayerEntity;
+                                    m_localPlayerEntity = en;
+                                    spawnBullet();
+                                    m_localPlayerEntity = savedLocal;
+                                }
                                 break;
                             }
                         }
@@ -525,6 +576,20 @@ private:
                     m_host->broadcast(e.message, false, e.peerId);
                 }
             }
+            else if (e.message.header.type == wingz::net::MessageType::HitEffect)
+            {
+                // Только клиент создаёт частицы по этому сообщению
+                if (!m_isServer)
+                {
+                    wingz::net::Serializer ser(e.message.data);
+                    if (ser.remainingBytes() >= sizeof(float) * 2)
+                    {
+                        float x = ser.readF32();
+                        float y = ser.readF32();
+                        spawnHitParticles(x, y);
+                    }
+                }
+            }
             break;
         }
         default:
@@ -563,6 +628,122 @@ private:
             explosionEmitter,
             30
         );
+    }
+
+    void spawnHitParticles(float x, float y)
+    {
+        wingz::ecs::ParticleEmitter debrisEmitter;
+        debrisEmitter.baseLifetime = 0.4f;
+        debrisEmitter.lifetimeVariance = 0.2f;
+        debrisEmitter.baseSpeed = 150.0f;
+        debrisEmitter.speedVariance = 80.0f;
+        debrisEmitter.spreadAngle = 3.14159265f;
+        debrisEmitter.baseAngle = 0.0f;
+        debrisEmitter.startR = 0.8f;
+        debrisEmitter.startG = 0.3f;
+        debrisEmitter.startB = 0.3f;
+        debrisEmitter.startA = 1.0f;
+        debrisEmitter.endR = 0.6f;
+        debrisEmitter.endG = 0.2f;
+        debrisEmitter.endB = 0.2f;
+        debrisEmitter.endA = 0.0f;
+        debrisEmitter.startWidth = 6.0f;
+        debrisEmitter.startHeight = 6.0f;
+        debrisEmitter.endWidth = 2.0f;
+        debrisEmitter.endHeight = 2.0f;
+        debrisEmitter.fadeOut = true;
+        debrisEmitter.flicker = true;
+        debrisEmitter.particleType = wingz::ecs::Particle::Type::Spark;
+
+        wingz::ecs::ParticleSystem::emitBurst(
+            m_scene->registry(),
+            x, y,
+            debrisEmitter,
+            12
+        );
+    }
+
+    void sendShootEvent()
+    {
+        if (!m_host || !m_host->isRunning())
+            return;
+
+        wingz::net::Message msg;
+        msg.header.type = wingz::net::MessageType::InputState; // можно завести отдельный тип
+        msg.header.tick = m_networkTick;
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeU32(m_networkTick);
+        ser.writeF32(0.0f); // moveX не используется
+        ser.writeF32(0.0f); // moveY не используется
+        ser.writeU8(1); // fire = true
+
+        if (m_isServer)
+        {
+            // Сервер сразу создаёт пулю
+            spawnBullet();
+            // И рассылает событие клиентам (опционально)
+        }
+        else
+        {
+            m_host->send(0, msg, false);
+        }
+    }
+
+    void spawnBullet()
+    {
+        if (m_localPlayerEntity == entt::null
+            || !m_scene->registry().valid(m_localPlayerEntity))
+            return;
+
+        auto& playerTransform = m_scene->registry().get<wingz::ecs::Transform>(
+            m_localPlayerEntity
+        );
+
+        auto bullet = m_scene->registry().create();
+        m_scene->registry().emplace<wingz::ecs::Transform>(
+            bullet, playerTransform.x, playerTransform.y - 20.0f, 0.0f
+        );
+        m_scene->registry().emplace<wingz::ecs::Velocity>(bullet, 0.0f, -500.0f, 0.0f);
+        m_scene->registry().emplace<wingz::ecs::Sprite>(
+            bullet, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 8.0f, 12.0f,
+            1.0f, 1.0f, 0.0f, 1.0f
+        );
+        m_scene->registry().emplace<wingz::ecs::Tag>(bullet, "Bullet");
+        m_scene->registry().emplace<wingz::ecs::Bullet>(
+            bullet, 25.0f, m_localPlayerEntity
+        );
+        m_scene->registry().emplace<wingz::physics::Collider>(
+            bullet,
+            wingz::physics::AABB { 0, 0, 4, 6 },
+            wingz::physics::CollisionLayer::PlayerBullet,
+            wingz::physics::CollisionLayer::Wall,
+            false, false
+        );
+
+        // Регистрируем для репликации
+        if (m_replication)
+            m_replication->registerEntity(m_scene->registry(), bullet);
+    }
+
+    void sendHitEffect(float x, float y)
+    {
+        if (!m_host || !m_host->isRunning() || !m_isServer)
+            return;
+
+        // Сервер создаёт частицы локально
+        spawnHitParticles(x, y);
+
+        // Рассылаем клиентам
+        wingz::net::Message msg;
+        msg.header.type = wingz::net::MessageType::HitEffect;
+        msg.header.tick = m_networkTick;
+
+        wingz::net::Serializer ser(msg.data);
+        ser.writeF32(x);
+        ser.writeF32(y);
+
+        m_host->broadcast(msg, false);
     }
 
     // Интерполяция

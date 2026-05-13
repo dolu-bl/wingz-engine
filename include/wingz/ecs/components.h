@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include <entt/entt.hpp>
+
 namespace wingz::ecs
 {
 
@@ -59,6 +61,29 @@ struct InterpolatedTransform
     float x = 0.0f;
     float y = 0.0f;
     float rot = 0.0f;
+};
+
+/// Здоровье сущности.
+/// Когда <= 0, сущность помечается на уничтожение.
+struct Health
+{
+    float current = 100.0f;
+    float max = 100.0f;
+};
+
+/// Компонент пули.
+/// При коллизии наносит урон и самоуничтожается.
+struct Bullet
+{
+    float damage = 25.0f;
+    entt::entity owner = entt::null; // кто выстрелил
+};
+
+/// Маркер "мёртвой" сущности — будет уничтожена системой смерти.
+/// Можно повесить таймер для анимации смерти перед удалением.
+struct Dead
+{
+    float timer = 0.0f; // если > 0 — отложенное удаление
 };
 
 } // namespace wingz::ecs

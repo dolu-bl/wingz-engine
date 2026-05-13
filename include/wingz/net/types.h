@@ -34,6 +34,7 @@ enum class MessageType : uint8_t
 
     // Эффекты
     ParticleBurst,
+    HitEffect,
 
     // Служебные
     Ping,
@@ -80,6 +81,10 @@ struct SerializedEntityState
     float g;
     float b;
     float a;
+    float health; // текущее здоровье
+    float maxHealth; // максимальное здоровье
+    float width;
+    float height;
 };
 
 } // namespace wingz::net

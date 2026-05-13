@@ -4,6 +4,8 @@
 
 #include <entt/entt.hpp>
 
+#include <wingz/net/types.h>
+
 namespace wingz
 {
 
@@ -42,6 +44,9 @@ public:
     void render(gfx::SpriteBatch& batch);
 
     entt::registry& registry();
+
+    /// Установить коллбэк при попадании пули (для сети).
+    void setHitCallback(std::function<void(float x, float y)> callback);
 
 private:
     struct Impl;

@@ -2,6 +2,7 @@
 
 #include "wingz/scene.h"
 
+#include "wingz/ecs/combat_systems.h"
 #include "wingz/ecs/components.h"
 #include "wingz/ecs/particle.h"
 #include "wingz/ecs/particle_system.h"
@@ -20,6 +21,7 @@ struct Scene::Impl
     gfx::Camera camera;
     std::unique_ptr<physics::PhysicsWorld> physicsWorld;
     std::unique_ptr<ecs::ParticleSystem> particleSystem;
+    std::function<void(float, float)> hitCallback;
 };
 
 Scene::Scene()
@@ -78,37 +80,69 @@ void Scene::update(float dt)
     m_impl->physicsWorld->update(
         m_impl->registry,
         dt,
-        [](const physics::CollisionEvent& event)
+        [this](const physics::CollisionEvent& event)
         {
             spdlog::debug(
                 "Коллизия: entity {} vs entity {}",
                 static_cast<uint32_t>(event.entityA),
                 static_cast<uint32_t>(event.entityB)
             );
+
+            // Если попали по стене — сообщаем об этом
+            if (m_impl->hitCallback)
+            {
+                bool bulletA = m_impl->registry.try_get<ecs::Bullet>(event.entityA);
+                bool bulletB = m_impl->registry.try_get<ecs::Bullet>(event.entityB);
+
+                if (bulletA || bulletB)
+                {
+                    // Получаем позицию цели
+                    entt::entity target = bulletA ? event.entityB : event.entityA;
+                    const auto* transform = m_impl->registry.try_get<ecs::Transform>(target);
+                    if (transform)
+                        m_impl->hitCallback(transform->x, transform->y);
+                }
+            }
+
+            // Обрабатываем урон от пуль
+            ecs::damageSystem(m_impl->registry, event);
         }
     );
+
+    // 5. Система смерти (после физики)
+    ecs::deathSystem(m_impl->registry, dt);
 }
 
 void Scene::updateVisuals(float dt)
 {
-    // Двигаем только частицы (у них есть компонент Particle)
+    // Двигаем частицы
     auto moveView = m_impl->registry.view<ecs::Particle, ecs::Transform, ecs::Velocity>();
     for (auto entity : moveView)
     {
         auto& transform = moveView.get<ecs::Transform>(entity);
         auto& velocity = moveView.get<ecs::Velocity>(entity);
-
         transform.x += velocity.dx * dt;
         transform.y += velocity.dy * dt;
         transform.rot = std::atan2(velocity.dy, velocity.dx);
-
-        // Затухание скорости
         velocity.dx *= 0.98f;
         velocity.dy *= 0.98f;
     }
 
-    // Обновляем эмиттеры, время жизни, цвет, размер
+    // Двигаем пули (Bullet) — они не Particle
+    auto bulletView = m_impl->registry.view<ecs::Bullet, ecs::Transform, ecs::Velocity>();
+    for (auto entity : bulletView)
+    {
+        auto& transform = bulletView.get<ecs::Transform>(entity);
+        auto& velocity = bulletView.get<ecs::Velocity>(entity);
+        transform.x += velocity.dx * dt;
+        transform.y += velocity.dy * dt;
+    }
+
+    // Обновляем эмиттеры и время жизни частиц
     m_impl->particleSystem->update(m_impl->registry, dt);
+
+    // Система смерти
+    ecs::deathSystem(m_impl->registry, dt);
 }
 
 void Scene::render(gfx::SpriteBatch& batch)
@@ -159,6 +193,11 @@ void Scene::render(gfx::SpriteBatch& batch)
 entt::registry& Scene::registry()
 {
     return m_impl->registry;
+}
+
+void Scene::setHitCallback(std::function<void(float x, float y)> callback)
+{
+    m_impl->hitCallback = std::move(callback);
 }
 
 } // namespace wingz
