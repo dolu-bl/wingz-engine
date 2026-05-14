@@ -2,10 +2,22 @@
 
 #include <memory>
 
+#include <wingz/core/game_state.h>
+
 namespace wingz
 {
 
 class Window;
+
+namespace gfx
+{
+class ImGuiContext;
+}
+
+namespace input
+{
+class InputManager;
+}
 
 /// Базовый класс для приложения на Wingz Engine.
 /// Игра наследуется от App и реализует onInit/onUpdate/onShutdown.
@@ -15,7 +27,6 @@ public:
     App();
     virtual ~App();
 
-    // Запрещаем копирование
     App(const App&) = delete;
     App& operator=(const App&) = delete;
 
@@ -28,7 +39,7 @@ protected:
     virtual void onInit() = 0;
 
     /// Вызывается каждый кадр. dt — время кадра в секундах.
-    virtual void onUpdate(float dt) = 0;
+    virtual void onUpdate(float dt) {};
 
     /// Вызывается при завершении приложения.
     virtual void onShutdown() = 0;
@@ -38,6 +49,12 @@ protected:
 
     /// Доступ к окну приложения.
     Window& window();
+
+    void createInput();
+    void createImGui();
+
+    core::StateStack& stateStack();
+    virtual core::StateContext createContext();
 
 private:
     struct Impl;

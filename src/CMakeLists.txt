@@ -11,15 +11,16 @@ add_library(wingz STATIC
     wingz/app.cpp
     wingz/scene.cpp
     wingz/window.cpp
+    wingz/core/game_state.cpp
     wingz/core/timer.cpp
     wingz/ecs/particle_system.cpp
     wingz/gfx/shader.cpp
     wingz/gfx/camera.cpp
     wingz/gfx/camera_controller.cpp
+    wingz/gfx/imgui_context.cpp
     wingz/gfx/sprite_batch.cpp
     wingz/gfx/texture.cpp
     wingz/gfx/texture_atlas.cpp
-    wingz/gfx/debug_ui.cpp
     wingz/input/input_manager.cpp
     wingz/input/action_map.cpp
     wingz/physics/physics_world.cpp

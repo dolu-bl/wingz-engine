@@ -6,17 +6,17 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
-#include "wingz/gfx/debug_ui.h"
+#include "wingz/gfx/imgui_context.h"
 
 namespace wingz::gfx
 {
 
-struct DebugUI::Impl
+struct ImGuiContext::Impl
 {
     GLFWwindow* window = nullptr;
 };
 
-DebugUI::DebugUI(GLFWwindow* window)
+ImGuiContext::ImGuiContext(GLFWwindow* window)
     : m_impl(std::make_unique<Impl>())
 {
     m_impl->window = window;
@@ -32,21 +32,21 @@ DebugUI::DebugUI(GLFWwindow* window)
     ImGui_ImplOpenGL3_Init("#version 460");
 }
 
-DebugUI::~DebugUI()
+ImGuiContext::~ImGuiContext()
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
 
-void DebugUI::beginFrame()
+void ImGuiContext::beginFrame()
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
 
-void DebugUI::endFrame()
+void ImGuiContext::endFrame()
 {
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
