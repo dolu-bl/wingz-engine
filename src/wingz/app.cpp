@@ -4,6 +4,8 @@
 #include <spdlog/spdlog.h>
 
 #include "wingz/app.h"
+#include "wingz/gfx/imgui_context.h"
+#include "wingz/input/input_manager.h"
 #include "wingz/window.h"
 
 namespace wingz
@@ -12,6 +14,9 @@ namespace wingz
 struct App::Impl
 {
     std::unique_ptr<Window> window;
+    std::unique_ptr<input::InputManager> inputManager;
+    std::unique_ptr<gfx::ImGuiContext> imGui;
+    core::StateStack stateStack;
 };
 
 App::App()
@@ -30,8 +35,38 @@ void App::createWindow(const WindowDesc& desc)
 Window& App::window()
 {
     if (!m_impl->window)
-        throw std::runtime_error("Окно ещё не создано. Вызовите createWindow() в onInit()");
+        throw std::runtime_error("Окно не создано");
     return *m_impl->window;
+}
+
+void App::createInput()
+{
+    if (!m_impl->window)
+        throw std::runtime_error("Сначала создайте окно");
+    m_impl->inputManager = std::make_unique<input::InputManager>();
+    m_impl->inputManager->attach(m_impl->window->nativeHandle());
+}
+
+void App::createImGui()
+{
+    if (!m_impl->window)
+        throw std::runtime_error("Сначала создайте окно");
+    m_impl->imGui = std::make_unique<gfx::ImGuiContext>(m_impl->window->nativeHandle());
+}
+
+core::StateStack& App::stateStack()
+{
+    return m_impl->stateStack;
+}
+
+core::StateContext App::createContext()
+{
+    core::StateContext ctx;
+    ctx.stack = &m_impl->stateStack;
+    ctx.window = m_impl->window.get();
+    ctx.inputManager = m_impl->inputManager.get();
+    ctx.imGui = m_impl->imGui.get();
+    return ctx;
 }
 
 int App::run(int argc, char** argv)
@@ -41,9 +76,10 @@ int App::run(int argc, char** argv)
         onInit();
 
         if (!m_impl->window)
-            throw std::runtime_error("onInit() не создал окно. Вызовите createWindow() в onInit()");
+            throw std::runtime_error("onInit() не создал окно");
 
-        spdlog::info("Приложение запущено");
+        if (m_impl->stateStack.empty())
+            spdlog::warn("Стек состояний пуст");
 
         auto lastTime = std::chrono::high_resolution_clock::now();
 
@@ -57,8 +93,18 @@ int App::run(int argc, char** argv)
                 dt = 0.1f;
 
             m_impl->window->pollEvents();
+
             onUpdate(dt);
+
+            m_impl->stateStack.update(dt);
+            m_impl->stateStack.render();
             m_impl->window->swapBuffers();
+
+            if (m_impl->stateStack.empty())
+            {
+                spdlog::info("Стек состояний пуст, выход");
+                break;
+            }
         }
 
         onShutdown();
