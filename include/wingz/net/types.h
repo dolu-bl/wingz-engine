@@ -85,6 +85,7 @@ struct SerializedEntityState
     float maxHealth; // максимальное здоровье
     float width;
     float height;
+    uint32_t resourceId;
 };
 
 } // namespace wingz::net

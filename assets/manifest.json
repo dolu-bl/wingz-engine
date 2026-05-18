@@ -1,0 +1,48 @@
+{
+    "version": 1,
+    "atlases": {
+        "game": {
+            "image": "assets/game_atlas.png",
+            "regions": {
+                "player_ship": {
+                    "id": 1001,
+                    "x": 0,
+                    "y": 0,
+                    "width": 32,
+                    "height": 32
+                },
+                "bullet": {
+                    "id": 1002,
+                    "x": 5,
+                    "y": 132,
+                    "width": 6,
+                    "height": 8
+                },
+                "wall_top": {
+                    "id": 1003,
+                    "x": 80,
+                    "y": 208,
+                    "width": 32,
+                    "height": 32
+                },
+                "wall_side": {
+                    "id": 1004,
+                    "x": 96,
+                    "y": 224,
+                    "width": 32,
+                    "height": 32
+                }
+            }
+        }
+    },
+    "textures": {
+        "ui_button": {
+            "id": 2001,
+            "path": "assets/ui/button.png"
+        },
+        "background": {
+            "id": 2002,
+            "path": "assets/background.png"
+        }
+    }
+}

@@ -1,19 +1,40 @@
 #pragma once
 
-#include <functional>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+#include <nlohmann/json.hpp>
+
 #include <wingz/gfx/texture.h>
-#include <wingz/gfx/texture_atlas.h>
 
 namespace wingz::core
 {
 
-/// Менеджер ресурсов.
-/// Кеширует текстуры и атласы по строковому ключу.
-/// Ленивая загрузка: ресурс загружается при первом запросе.
+using ResourceId = uint32_t;
+constexpr ResourceId kInvalidResourceId = 0;
+
+/// Информация о загруженном ресурсе (текстура или регион атласа)
+struct ResourceInfo
+{
+    ResourceId id = kInvalidResourceId;
+    std::string name;
+
+    // Данные для рендера
+    uint32_t textureHandle = 0;
+    float u0 = 0.0f;
+    float v0 = 0.0f;
+    float u1 = 1.0f;
+    float v1 = 1.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+
+    // Отладка
+    std::string debugName;
+};
+
+/// Менеджер ресурсов — загружает всё из единого манифеста
 class AssetManager
 {
 public:
@@ -23,70 +44,64 @@ public:
     AssetManager(const AssetManager&) = delete;
     AssetManager& operator=(const AssetManager&) = delete;
 
-    // ────────────────────────────────────────
-    // Текстуры
-    // ────────────────────────────────────────
+    /// Загружает манифест и все описанные в нём ресурсы
+    /// @param manifestPath Путь к JSON-файлу манифеста
+    bool loadManifest(const std::string& manifestPath);
 
-    /// Загрузить текстуру (если уже загружена — вернёт кешированную).
-    /// @param key Уникальный ключ (например, "player", "wall", "bg_cave").
-    /// @param path Путь к файлу текстуры.
-    gfx::Texture* loadTexture(const std::string& key, const std::string& path);
+    /// Получить информацию о ресурсе по ID
+    const ResourceInfo* getResource(ResourceId id) const;
 
-    /// Получить уже загруженную текстуру. nullptr если не найдена.
-    gfx::Texture* getTexture(const std::string& key) const;
+    /// Получить информацию о ресурсе по имени
+    const ResourceInfo* getResource(const std::string& name) const;
 
-    /// Загрузить текстуру, если ещё не загружена.
-    /// @param key Ключ.
-    /// @param path Путь к файлу.
-    gfx::Texture* texture(const std::string& key, const std::string& path);
+    /// Получить ID ресурса по имени
+    ResourceId getResourceId(const std::string& name) const;
 
-    // ────────────────────────────────────────
-    // Текстурные атласы
-    // ────────────────────────────────────────
+    /// Выгрузить ресурс
+    void unload(ResourceId id);
 
-    /// Загрузить атлас (текстура + JSON с регионами).
-    /// @param key Ключ (например, "tiles", "ui").
-    /// @param imagePath Путь к PNG.
-    /// @param jsonPath Путь к JSON с регионами.
-    gfx::TextureAtlas* loadAtlas(
-        const std::string& key,
-        const std::string& imagePath,
-        const std::string& jsonPath
-    );
-
-    /// Получить загруженный атлас.
-    gfx::TextureAtlas* getAtlas(const std::string& key) const;
-
-    // ────────────────────────────────────────
-    // Управление
-    // ────────────────────────────────────────
-
-    /// Выгрузить ресурс по ключу.
-    void unload(const std::string& key);
-
-    /// Выгрузить все ресурсы.
+    /// Выгрузить все ресурсы
     void clear();
 
-    /// Количество загруженных ресурсов.
-    size_t textureCount() const;
-    size_t atlasCount() const;
+    /// Количество загруженных ресурсов
+    size_t resourceCount() const { return m_resourcesById.size(); }
 
 private:
-    struct TextureEntry
+    struct AtlasTexture
     {
         std::unique_ptr<gfx::Texture> texture;
-        std::string path;
+        uint32_t handle = 0;
+        float width = 0.0f, height = 0.0f;
     };
 
-    struct AtlasEntry
-    {
-        std::unique_ptr<gfx::TextureAtlas> atlas;
-        std::string imagePath;
-        std::string jsonPath;
-    };
+    // Загружает текстуру атласа и все его регионы
+    bool loadAtlas(const std::string& name, const nlohmann::json& atlasData);
 
-    std::unordered_map<std::string, TextureEntry> m_textures;
-    std::unordered_map<std::string, AtlasEntry> m_atlases;
+    // Загружает отдельную текстуру
+    bool loadSeparateTexture(
+        const std::string& name,
+        const nlohmann::json& textureData
+    );
+
+    // Регистрирует ресурс во внутренних индексах
+    void registerResource(
+        ResourceId id,
+        const std::string& name,
+        uint32_t textureHandle,
+        float u0,
+        float v0,
+        float u1,
+        float v1,
+        float width,
+        float height
+    );
+
+    std::unordered_map<ResourceId, ResourceInfo> m_resourcesById;
+    std::unordered_map<std::string, ResourceId> m_resourcesByName;
+
+    // Хранилища текстур (владеют памятью)
+    std::unordered_map<std::string, AtlasTexture> m_atlases;
+    std::unordered_map<ResourceId, std::unique_ptr<gfx::Texture>> m_separateTextures;
 };
 
 } // namespace wingz::core

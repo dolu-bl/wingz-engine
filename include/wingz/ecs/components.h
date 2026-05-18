@@ -27,12 +27,18 @@ struct Velocity
 /// Спрайт (указатель на текстуру и её регион).
 struct Sprite
 {
-    uint32_t textureId = 0;
-    float u0 = 0.0f, v0 = 0.0f;
-    float u1 = 1.0f, v1 = 1.0f;
+    uint32_t resourceId = 0; // Глобальный ID ресурса (для сети)
+    uint32_t textureId = 0; // OpenGL хендл (для рендера)
+    float u0 = 0.0f;
+    float v0 = 0.0f;
+    float u1 = 1.0f;
+    float v1 = 1.0f;
     float width = 64.0f;
     float height = 64.0f;
-    float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
+    float r = 1.0f;
+    float g = 1.0f;
+    float b = 1.0f;
+    float a = 1.0f;
 };
 
 /// Тег (имя сущности для отладки).

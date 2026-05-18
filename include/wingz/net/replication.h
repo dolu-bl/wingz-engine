@@ -6,6 +6,11 @@
 
 #include <wingz/net/types.h>
 
+namespace wingz::core
+{
+class AssetManager;
+}
+
 namespace wingz::net
 {
 
@@ -15,7 +20,7 @@ class Host;
 struct Networked
 {
     NetEntityId netId = kInvalidNetEntityId;
-    PeerId ownerId = kInvalidPeerId; // кто владеет (обычно сервер)
+    PeerId ownerId = kInvalidPeerId;
 };
 
 /// Система репликации: синхронизирует состояние между сервером и клиентами.
@@ -34,6 +39,9 @@ public:
     /// Удалить сущность из репликации.
     void unregisterEntity(entt::registry& registry, entt::entity entity);
 
+    /// Установить AssetManager для клиента.
+    void setAssetManager(core::AssetManager* assets) { m_assets = assets; }
+
     /// Сервер: собрать состояние мира и разослать клиентам.
     void serverUpdate(entt::registry& registry, Host& host, TickNumber tick);
 
@@ -41,12 +49,12 @@ public:
     void clientReceive(entt::registry& registry, const Message& msg);
 
     /// Клиент: десериализовать WorldState в список состояний.
-    /// Используется совместно с ClientInterpolation.
     std::vector<SerializedEntityState> deserializeWorldState(const Message& msg) const;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
+    core::AssetManager* m_assets = nullptr;
 };
 
 } // namespace wingz::net

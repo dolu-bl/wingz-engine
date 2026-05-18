@@ -65,6 +65,7 @@ public:
         {
             m_host = wingz::net::Host::createClient();
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
+            m_replication->setAssetManager(ctx.assets);
             m_host->connect("127.0.0.1", 7777);
             m_interpolation = std::make_unique<wingz::net::ClientInterpolation>();
             spdlog::info("Режим клиента");
@@ -378,21 +379,18 @@ private:
         sprite.b = (playerId == 0) ? 1.0f : 0.7f;
         sprite.a = 1.0f;
 
-        // Если атлас загружен — берём текстурные координаты из него
-        auto* atlas = ctx()->assets->getAtlas("game");
-        if (atlas)
+        // Получаем ресурс из AssetManager по имени
+        const auto* resource = ctx()->assets->getResource("player_ship");
+        if (resource)
         {
-            const auto* region = atlas->find("player_ship");
-            if (region)
-            {
-                sprite.textureId = region->textureId;
-                sprite.u0 = region->u0;
-                sprite.v0 = region->v0;
-                sprite.u1 = region->u1;
-                sprite.v1 = region->v1;
-                sprite.width = region->width;
-                sprite.height = region->height;
-            }
+            sprite.resourceId = resource->id;
+            sprite.textureId = resource->textureHandle;
+            sprite.u0 = resource->u0;
+            sprite.v0 = resource->v0;
+            sprite.u1 = resource->u1;
+            sprite.v1 = resource->v1;
+            sprite.width = resource->width;
+            sprite.height = resource->height;
         }
 
         m_scene->registry().emplace<wingz::ecs::Sprite>(e, sprite);
@@ -416,9 +414,7 @@ private:
 
     void createWalls()
     {
-        auto* atlas = ctx()->assets->getAtlas("game");
-
-        auto makeWall = [this, atlas](float x, float y, float w, float h, const char* tag, bool destructible)
+        auto makeWall = [this](float x, float y, float w, float h, const char* tag, bool destructible)
         {
             auto e = m_scene->registry().create();
             m_scene->registry().emplace<wingz::ecs::Transform>(e, x, y, 0);
@@ -433,20 +429,17 @@ private:
             sprite.b = destructible ? 0.6f : 0.8f;
             sprite.a = 1.0f;
 
-            // Берём текстурные координаты из атласа
-            if (atlas)
+            // Выбираем имя региона в зависимости от ориентации стены
+            std::string regionName = (std::abs(h) < std::abs(w)) ? "wall_top" : "wall_side";
+            const auto* resource = ctx()->assets->getResource(regionName);
+            if (resource)
             {
-                const auto* region = atlas->find(
-                    std::abs(h) < std::abs(w) ? "wall_top" : "wall_side"
-                );
-                if (region)
-                {
-                    sprite.textureId = region->textureId;
-                    sprite.u0 = region->u0;
-                    sprite.v0 = region->v0;
-                    sprite.u1 = region->u1;
-                    sprite.v1 = region->v1;
-                }
+                sprite.resourceId = resource->id;
+                sprite.textureId = resource->textureHandle;
+                sprite.u0 = resource->u0;
+                sprite.v0 = resource->v0;
+                sprite.u1 = resource->u1;
+                sprite.v1 = resource->v1;
             }
 
             m_scene->registry().emplace<wingz::ecs::Sprite>(e, sprite);
@@ -597,20 +590,17 @@ private:
         sprite.b = 1.0f;
         sprite.a = 1.0f;
 
-        auto* atlas = ctx()->assets->getAtlas("game");
-        if (atlas)
+        const auto* resource = ctx()->assets->getResource("bullet");
+        if (resource)
         {
-            const auto* region = atlas->find("bullet");
-            if (region)
-            {
-                sprite.textureId = region->textureId;
-                sprite.u0 = region->u0;
-                sprite.v0 = region->v0;
-                sprite.u1 = region->u1;
-                sprite.v1 = region->v1;
-                sprite.width = region->width;
-                sprite.height = region->height;
-            }
+            sprite.resourceId = resource->id;
+            sprite.textureId = resource->textureHandle;
+            sprite.u0 = resource->u0;
+            sprite.v0 = resource->v0;
+            sprite.u1 = resource->u1;
+            sprite.v1 = resource->v1;
+            sprite.width = resource->width;
+            sprite.height = resource->height;
         }
 
         m_scene->registry().emplace<wingz::ecs::Sprite>(bullet, sprite);
@@ -933,8 +923,11 @@ protected:
         createImGui();
         createAssetManager();
 
-        // Предзагрузка ресурсов
-        assets().loadAtlas("game", "assets/test.png", "assets/test.json");
+        // Загрузка ресурсов
+        if (!assets().loadManifest("assets/manifest.json"))
+        {
+            throw std::runtime_error("Не удалось загрузить манифест");
+        }
 
         auto ctx = createContext();
         stateStack().setContext(ctx);
