@@ -2,6 +2,8 @@
 
 #include "wingz/scene.h"
 
+#include "wingz/core/asset_manager.h"
+#include "wingz/ecs/animation_system.h"
 #include "wingz/ecs/combat_systems.h"
 #include "wingz/ecs/components.h"
 #include "wingz/ecs/particle.h"
@@ -22,6 +24,7 @@ struct Scene::Impl
     std::unique_ptr<physics::PhysicsWorld> physicsWorld;
     std::unique_ptr<ecs::ParticleSystem> particleSystem;
     std::function<void(float, float)> hitCallback;
+    core::AssetManager* assetManager = nullptr;
 };
 
 Scene::Scene()
@@ -67,6 +70,12 @@ void Scene::update(float dt)
 {
     // 1. Ввод
     ecs::inputSystem(m_impl->registry);
+
+    // 1.5. Анимации (после ввода, до движения — чтобы анимация ходьбы работала)
+    if (m_impl->assetManager)
+    {
+        ecs::animationSystem(m_impl->registry, m_impl->assetManager, dt);
+    }
 
     // 2. Движение (все сущности с Velocity)
     ecs::movementSystem(m_impl->registry, dt);
@@ -201,6 +210,11 @@ void Scene::setHitCallback(std::function<void(float x, float y)> callback)
 gfx::CameraController& Scene::cameraController()
 {
     return *m_impl->cameraController;
+}
+
+void Scene::setAssetManager(core::AssetManager* assets)
+{
+    m_impl->assetManager = assets;
 }
 
 } // namespace wingz

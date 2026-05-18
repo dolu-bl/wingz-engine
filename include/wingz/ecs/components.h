@@ -92,4 +92,45 @@ struct Dead
     float timer = 0.0f; // если > 0 — отложенное удаление
 };
 
+/// Кадр анимации
+struct AnimationFrame
+{
+    uint32_t resourceId = 0; // ID ресурса в AssetManager
+    float duration = 0.1f; // Длительность кадра в секундах
+};
+
+/// Компонент анимации (покадровая)
+struct Animator
+{
+    std::vector<AnimationFrame> frames; // Список кадров
+    float elapsed = 0.0f; // Время в текущем кадре
+    size_t currentFrame = 0; // Индекс текущего кадра
+    bool looping = true; // Зациклить анимацию
+    bool playing = true; // Воспроизводится ли
+    bool flipX = false; // Отразить по горизонтали
+    bool flipY = false; // Отразить по вертикали
+
+    // Опционально: задержка перед началом
+    float startDelay = 0.0f;
+    float delayElapsed = 0.0f;
+
+    // Опционально: масштаб кадра
+    float scale = 1.0f;
+
+    /// Сбросить анимацию на начало
+    void reset()
+    {
+        elapsed = 0.0f;
+        currentFrame = 0;
+        delayElapsed = 0.0f;
+        playing = true;
+    }
+
+    /// Проверить, закончилась ли анимация
+    bool isFinished() const
+    {
+        return !playing && !looping && currentFrame >= frames.size();
+    }
+};
+
 } // namespace wingz::ecs

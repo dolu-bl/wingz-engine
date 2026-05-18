@@ -21,6 +21,11 @@ namespace ecs
 class ParticleSystem;
 }
 
+namespace core
+{
+class AssetManager;
+}
+
 /// Контейнер для ECS-мира и систем.
 /// Владеет registry и предоставляет доступ к нему.
 class Scene
@@ -52,6 +57,9 @@ public:
 
     /// Получить контроллер камеры.
     gfx::CameraController& cameraController();
+
+    /// Установить AssetManager (для анимаций)
+    void setAssetManager(core::AssetManager* assets);
 
 private:
     struct Impl;
