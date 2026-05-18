@@ -1,10 +1,10 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include <wingz/core/asset_manager.h>
 #include <wingz/gfx/imgui_context.h>
 #include <wingz/gfx/sprite_batch.h>
 #include <wingz/input/input_manager.h>
@@ -33,6 +33,7 @@ struct StateContext
     class net::Host* host = nullptr;
     class net::ReplicationSystem* replication = nullptr;
     class gfx::ImGuiContext* imGui = nullptr;
+    class core::AssetManager* assets = nullptr;
 };
 
 /// Базовый класс игрового состояния (экрана, сцены).

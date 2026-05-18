@@ -11,6 +11,7 @@ add_library(wingz STATIC
     wingz/app.cpp
     wingz/scene.cpp
     wingz/window.cpp
+    wingz/core/asset_manager.cpp
     wingz/core/game_state.cpp
     wingz/core/timer.cpp
     wingz/ecs/particle_system.cpp

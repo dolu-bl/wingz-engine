@@ -65,6 +65,7 @@ public:
         {
             m_host = wingz::net::Host::createClient();
             m_replication = std::make_unique<wingz::net::ReplicationSystem>();
+            m_replication->setAssetManager(ctx.assets);
             m_host->connect("127.0.0.1", 7777);
             m_interpolation = std::make_unique<wingz::net::ClientInterpolation>();
             spdlog::info("Режим клиента");
@@ -367,12 +368,32 @@ private:
         auto e = m_scene->registry().create();
         m_scene->registry().emplace<wingz::ecs::Transform>(e, 400.0f, 360.0f, 0.0f);
         m_scene->registry().emplace<wingz::ecs::Velocity>(e, 0.0f, 0.0f, 0.0f);
-        m_scene->registry().emplace<wingz::ecs::Sprite>(
-            e, 0u, 0, 0, 1, 1, 48, 48,
-            (playerId == 0) ? 0.2f : 0.2f,
-            (playerId == 0) ? 0.6f : 1.0f,
-            (playerId == 0) ? 1.0f : 0.2f, 1.0f
-        );
+
+        // Получаем спрайт из атласа
+        wingz::ecs::Sprite sprite;
+        sprite.textureId = 0;
+        sprite.width = 48.0f;
+        sprite.height = 48.0f;
+        sprite.r = (playerId == 0) ? 1.0f : 1.0f;
+        sprite.g = (playerId == 0) ? 1.0f : 0.7f;
+        sprite.b = (playerId == 0) ? 1.0f : 0.7f;
+        sprite.a = 1.0f;
+
+        // Получаем ресурс из AssetManager по имени
+        const auto* resource = ctx()->assets->getResource("player_ship");
+        if (resource)
+        {
+            sprite.resourceId = resource->id;
+            sprite.textureId = resource->textureHandle;
+            sprite.u0 = resource->u0;
+            sprite.v0 = resource->v0;
+            sprite.u1 = resource->u1;
+            sprite.v1 = resource->v1;
+            sprite.width = resource->width;
+            sprite.height = resource->height;
+        }
+
+        m_scene->registry().emplace<wingz::ecs::Sprite>(e, sprite);
         m_scene->registry().emplace<wingz::ecs::Tag>(
             e,
             (playerId == 0) ? "ServerPlayer" : "ClientPlayer"
@@ -397,13 +418,31 @@ private:
         {
             auto e = m_scene->registry().create();
             m_scene->registry().emplace<wingz::ecs::Transform>(e, x, y, 0);
-            m_scene->registry().emplace<wingz::ecs::Sprite>(
-                e, 0u, 0, 0, 1, 1, w, h,
-                destructible ? 0.6f : 0.8f, // R: разрушаемые чуть темнее
-                destructible ? 0.4f : 0.3f, // G
-                destructible ? 0.2f : 0.3f, // B
-                1.0f
-            );
+
+            // Спрайт стены
+            wingz::ecs::Sprite sprite;
+            sprite.textureId = 0;
+            sprite.width = w;
+            sprite.height = h;
+            sprite.r = destructible ? 0.6f : 0.8f;
+            sprite.g = destructible ? 0.6f : 0.8f;
+            sprite.b = destructible ? 0.6f : 0.8f;
+            sprite.a = 1.0f;
+
+            // Выбираем имя региона в зависимости от ориентации стены
+            std::string regionName = (std::abs(h) < std::abs(w)) ? "wall_top" : "wall_side";
+            const auto* resource = ctx()->assets->getResource(regionName);
+            if (resource)
+            {
+                sprite.resourceId = resource->id;
+                sprite.textureId = resource->textureHandle;
+                sprite.u0 = resource->u0;
+                sprite.v0 = resource->v0;
+                sprite.u1 = resource->u1;
+                sprite.v1 = resource->v1;
+            }
+
+            m_scene->registry().emplace<wingz::ecs::Sprite>(e, sprite);
             m_scene->registry().emplace<wingz::ecs::Tag>(e, tag);
             m_scene->registry().emplace<wingz::physics::Collider>(
                 e,
@@ -540,10 +579,31 @@ private:
         m_scene->registry().emplace<wingz::ecs::Velocity>(
             bullet, 0.0f, -500.0f, 0.0f
         );
-        m_scene->registry().emplace<wingz::ecs::Sprite>(
-            bullet, 0u, 0.0f, 0.0f, 1.0f, 1.0f, 8.0f, 12.0f,
-            1.0f, 1.0f, 0.0f, 1.0f
-        );
+
+        // Спрайт пули
+        wingz::ecs::Sprite sprite;
+        sprite.textureId = 0;
+        sprite.width = 8.0f;
+        sprite.height = 12.0f;
+        sprite.r = 1.0f;
+        sprite.g = 1.0f;
+        sprite.b = 1.0f;
+        sprite.a = 1.0f;
+
+        const auto* resource = ctx()->assets->getResource("bullet");
+        if (resource)
+        {
+            sprite.resourceId = resource->id;
+            sprite.textureId = resource->textureHandle;
+            sprite.u0 = resource->u0;
+            sprite.v0 = resource->v0;
+            sprite.u1 = resource->u1;
+            sprite.v1 = resource->v1;
+            sprite.width = resource->width;
+            sprite.height = resource->height;
+        }
+
+        m_scene->registry().emplace<wingz::ecs::Sprite>(bullet, sprite);
         m_scene->registry().emplace<wingz::ecs::Tag>(bullet, "Bullet");
         m_scene->registry().emplace<wingz::ecs::Bullet>(
             bullet, 25.0f, m_localPlayerEntity
@@ -847,7 +907,10 @@ class SandboxApp : public wingz::App
 protected:
     void onInit() override
     {
-        createWindow(wingz::WindowDesc { .width = 1280, .height = 720, .title = "Wingz Engine" });
+        createWindow(
+            wingz::WindowDesc {
+                .width = 1280, .height = 720, .title = "Wingz Engine" }
+        );
 
         if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
             throw std::runtime_error("Не удалось загрузить OpenGL через glad");
@@ -858,6 +921,13 @@ protected:
 
         createInput();
         createImGui();
+        createAssetManager();
+
+        // Загрузка ресурсов
+        if (!assets().loadManifest("assets/manifest.json"))
+        {
+            throw std::runtime_error("Не удалось загрузить манифест");
+        }
 
         auto ctx = createContext();
         stateStack().setContext(ctx);

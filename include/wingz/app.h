@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include <wingz/core/asset_manager.h>
 #include <wingz/core/game_state.h>
 
 namespace wingz
@@ -39,7 +40,7 @@ protected:
     virtual void onInit() = 0;
 
     /// Вызывается каждый кадр. dt — время кадра в секундах.
-    virtual void onUpdate(float dt) {};
+    virtual void onUpdate(float dt) { };
 
     /// Вызывается при завершении приложения.
     virtual void onShutdown() = 0;
@@ -55,6 +56,12 @@ protected:
 
     core::StateStack& stateStack();
     virtual core::StateContext createContext();
+
+    /// Создать AssetManager. Вызови в onInit() если нужен.
+    void createAssetManager();
+
+    /// Доступ к AssetManager.
+    core::AssetManager& assets();
 
 private:
     struct Impl;

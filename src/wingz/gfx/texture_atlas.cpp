@@ -3,8 +3,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "wingz/gfx/texture_atlas.h"
 #include "wingz/gfx/texture.h"
+#include "wingz/gfx/texture_atlas.h"
 
 namespace wingz::gfx
 {
@@ -20,10 +20,9 @@ TextureAtlas::TextureAtlas(const std::string& imagePath, const std::string& json
 {
     m_impl->texture = std::make_unique<Texture>(imagePath);
 
-    float texW = static_cast<float>(m_impl->texture->width());
-    float texH = static_cast<float>(m_impl->texture->height());
+    const float textureWidth = static_cast<float>(m_impl->texture->width());
+    const float textureHeight = static_cast<float>(m_impl->texture->height());
 
-    // Загружаем JSON с регионами
     std::ifstream file(jsonPath);
     if (!file)
         throw std::runtime_error("Не удалось открыть JSON-атлас: " + jsonPath);
@@ -33,19 +32,21 @@ TextureAtlas::TextureAtlas(const std::string& imagePath, const std::string& json
 
     for (const auto& [name, region] : json.items())
     {
-        AtlasRegion r;
-        r.textureId = m_impl->texture->handle();
-        r.width = region.value("width", 0.0f);
-        r.height = region.value("height", 0.0f);
+        AtlasRegion reg;
+        reg.textureId = m_impl->texture->handle();
+        reg.width = region.value("width", 0.0f);
+        reg.height = region.value("height", 0.0f);
+
         float x = region.value("x", 0.0f);
         float y = region.value("y", 0.0f);
 
-        r.u0 = x / texW;
-        r.v0 = y / texH;
-        r.u1 = (x + r.width) / texW;
-        r.v1 = (y + r.height) / texH;
+        // БЕЗ ИНВЕРСИИ — просто прямые координаты
+        reg.u0 = x / textureWidth;
+        reg.v0 = y / textureHeight;
+        reg.u1 = (x + reg.width) / textureWidth;
+        reg.v1 = (y + reg.height) / textureHeight;
 
-        m_impl->regions[name] = r;
+        m_impl->regions[name] = reg;
     }
 }
 

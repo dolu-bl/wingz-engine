@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <wingz/core/asset_manager.h>
 #include <wingz/ecs/components.h>
 #include <wingz/net/host.h>
 #include <wingz/net/replication.h>
@@ -52,8 +53,6 @@ void ReplicationSystem::serverUpdate(
     auto& states = m_impl->stateBuffer;
     states.clear();
 
-    // Собираем ВСЕ сущности с Networked и Sprite
-    // Игроки имеют Player+Velocity, стены — нет
     auto view = registry.view<const Networked, const ecs::Transform, const ecs::Sprite>();
 
     for (auto entity : view)
@@ -92,6 +91,7 @@ void ReplicationSystem::serverUpdate(
         st.a = sprite.a;
         st.width = sprite.width;
         st.height = sprite.height;
+        st.resourceId = sprite.resourceId;
 
         // Здоровье
         const auto* health = registry.try_get<ecs::Health>(entity);
@@ -135,6 +135,7 @@ void ReplicationSystem::serverUpdate(
         ser.writeF32(st.maxHealth);
         ser.writeF32(st.width);
         ser.writeF32(st.height);
+        ser.writeU32(st.resourceId);
     }
 
     host.broadcast(msg, false);
@@ -172,7 +173,7 @@ void ReplicationSystem::clientReceive(
 
         if (found != entt::null)
         {
-            // Обновляем
+            // Обновляем существующую
             auto& transform = view.get<ecs::Transform>(found);
             auto& velocity = view.get<ecs::Velocity>(found);
             auto& sprite = view.get<ecs::Sprite>(found);
@@ -183,12 +184,32 @@ void ReplicationSystem::clientReceive(
             velocity.dx = st.vx;
             velocity.dy = st.vy;
             velocity.drot = st.drot;
+
+            // Обновляем спрайт (цвета и размер)
             sprite.r = st.r;
             sprite.g = st.g;
             sprite.b = st.b;
             sprite.a = st.a;
             sprite.width = st.width;
             sprite.height = st.height;
+
+            // Если resourceId изменился — обновляем текстурные данные
+            if (sprite.resourceId != st.resourceId && m_assets)
+            {
+                sprite.resourceId = st.resourceId;
+                const auto* resource = m_assets->getResource(st.resourceId);
+                if (resource)
+                {
+                    sprite.textureId = resource->textureHandle;
+                    sprite.u0 = resource->u0;
+                    sprite.v0 = resource->v0;
+                    sprite.u1 = resource->u1;
+                    sprite.v1 = resource->v1;
+                    // Размер из ресурса может переопределить полученный от сервера
+                    // sprite.width = resource->width;
+                    // sprite.height = resource->height;
+                }
+            }
 
             // Здоровье
             if (st.health >= 0.0f)
@@ -207,17 +228,37 @@ void ReplicationSystem::clientReceive(
         }
         else
         {
-            // Создаём новую
+            // Создаём новую сущность
             auto entity = registry.create();
             registry.emplace<Networked>(entity, st.netId, 0);
             registry.emplace<ecs::Transform>(entity, st.x, st.y, st.rot);
             registry.emplace<ecs::Velocity>(entity, st.vx, st.vy, st.drot);
-            registry.emplace<ecs::Sprite>(
-                entity,
-                0u, 0.0f, 0.0f, 1.0f, 1.0f,
-                st.width, st.height,
-                st.r, st.g, st.b, st.a
-            );
+
+            // Создаём спрайт
+            ecs::Sprite sprite;
+            sprite.resourceId = st.resourceId;
+            sprite.r = st.r;
+            sprite.g = st.g;
+            sprite.b = st.b;
+            sprite.a = st.a;
+            sprite.width = st.width;
+            sprite.height = st.height;
+
+            // Заполняем текстурные данные из AssetManager
+            if (m_assets)
+            {
+                const auto* resource = m_assets->getResource(st.resourceId);
+                if (resource)
+                {
+                    sprite.textureId = resource->textureHandle;
+                    sprite.u0 = resource->u0;
+                    sprite.v0 = resource->v0;
+                    sprite.u1 = resource->u1;
+                    sprite.v1 = resource->v1;
+                }
+            }
+
+            registry.emplace<ecs::Sprite>(entity, sprite);
 
             if (st.playerId != 0xFF)
             {
@@ -235,7 +276,7 @@ void ReplicationSystem::clientReceive(
         }
     }
 
-    // Удаляем сущности, которых нет в снапшоте (уничтожены на сервере)
+    // Удаляем сущности, которых нет в снапшоте
     std::vector<entt::entity> toRemove;
     for (auto entity : view)
     {
@@ -263,11 +304,12 @@ std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
 
     uint32_t count = ser.readU32();
 
-    // 14 полей float: x, y, rot, vx, vy, drot, r, g, b, a, health, maxHealth, width, height
-    const size_t perEntityBytes = sizeof(uint32_t)
-        + sizeof(uint8_t)
-        + sizeof(float)
-            * 14;
+    // 14 полей float (x, y, rot, vx, vy, drot, r, g, b, a, health, maxHealth, width, height)
+    // + 2 поля uint32 (netId, resourceId) + 1 поле uint8 (playerId)
+    const size_t perEntityBytes = sizeof(uint32_t) // netId
+        + sizeof(uint8_t) // playerId
+        + sizeof(float) * 14 // 14 floats
+        + sizeof(uint32_t); // resourceId
 
     if (ser.remainingBytes() < count * perEntityBytes)
     {
@@ -296,6 +338,7 @@ std::vector<SerializedEntityState> ReplicationSystem::deserializeWorldState(
         st.maxHealth = ser.readF32();
         st.width = ser.readF32();
         st.height = ser.readF32();
+        st.resourceId = ser.readU32();
 
         states.push_back(st);
     }
