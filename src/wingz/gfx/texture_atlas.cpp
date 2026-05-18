@@ -20,8 +20,8 @@ TextureAtlas::TextureAtlas(const std::string& imagePath, const std::string& json
 {
     m_impl->texture = std::make_unique<Texture>(imagePath);
 
-    float texW = static_cast<float>(m_impl->texture->width());
-    float texH = static_cast<float>(m_impl->texture->height());
+    const float textureWidth = static_cast<float>(m_impl->texture->width());
+    const float textureHeight = static_cast<float>(m_impl->texture->height());
 
     // Загружаем JSON с регионами
     std::ifstream file(jsonPath);
@@ -33,19 +33,24 @@ TextureAtlas::TextureAtlas(const std::string& imagePath, const std::string& json
 
     for (const auto& [name, region] : json.items())
     {
-        AtlasRegion r;
-        r.textureId = m_impl->texture->handle();
-        r.width = region.value("width", 0.0f);
-        r.height = region.value("height", 0.0f);
-        float x = region.value("x", 0.0f);
-        float y = region.value("y", 0.0f);
+        AtlasRegion reg;
+        reg.textureId = m_impl->texture->handle();
+        reg.width = region.value("width", 0.0f);
+        reg.height = region.value("height", 0.0f);
+        const float x = region.value("x", 0.0f);
+        const float y = region.value("y", 0.0f);
 
-        r.u0 = x / texW;
-        r.v0 = y / texH;
-        r.u1 = (x + r.width) / texW;
-        r.v1 = (y + r.height) / texH;
 
-        m_impl->regions[name] = r;
+        // NOTE: Текстура перевёрнута (Y=0 = низ),
+        // а в JSON Y=0 = верх → инвертируем
+        const float yFromTop = textureHeight - y - reg.height;
+
+        reg.u0 = x / textureWidth;
+        reg.v0 = yFromTop / textureHeight;
+        reg.u1 = (x + reg.width) / textureWidth;
+        reg.v1 = (yFromTop + reg.height) / textureHeight;
+
+        m_impl->regions[name] = reg;
     }
 }
 
