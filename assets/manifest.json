@@ -11,22 +11,29 @@
                     "width": 32,
                     "height": 32
                 },
-                "bullet": {
+                "player_ship_2": {
                     "id": 1002,
+                    "x": 33,
+                    "y": 33,
+                    "width": 32,
+                    "height": 32
+                },
+                "bullet": {
+                    "id": 1003,
                     "x": 5,
                     "y": 132,
                     "width": 6,
                     "height": 8
                 },
                 "wall_top": {
-                    "id": 1003,
+                    "id": 1004,
                     "x": 80,
                     "y": 208,
                     "width": 32,
                     "height": 32
                 },
                 "wall_side": {
-                    "id": 1004,
+                    "id": 1005,
                     "x": 96,
                     "y": 224,
                     "width": 32,
