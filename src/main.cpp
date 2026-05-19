@@ -13,6 +13,7 @@
 #include <wingz/app.h>
 #include <wingz/core/game_state.h>
 #include <wingz/core/timer.h>
+#include <wingz/ecs/animation_system.h>
 #include <wingz/ecs/components.h>
 #include <wingz/ecs/particle.h>
 #include <wingz/ecs/particle_system.h>
@@ -46,6 +47,9 @@ public:
         m_scene = std::make_unique<wingz::Scene>();
         m_scene->init();
 
+        // Устанавливаем AssetManager для сцены (для анимаций)
+        m_scene->setAssetManager(ctx.assets);
+
         m_scene->cameraController().setWorldBounds(-500.0f, 1780.0f, -500.0f, 1220.0f);
 
         setupCameraActions();
@@ -74,6 +78,12 @@ public:
 
     void onUpdate(float dt) override
     {
+        // Анимации должны обновляться ДО рендера
+        if (ctx()->assets && m_scene)
+        {
+            wingz::ecs::animationSystem(m_scene->registry(), ctx()->assets, dt);
+        }
+
         auto* input = ctx()->inputManager;
         input->beginFrame();
         auto& snap = input->snapshot();
@@ -380,20 +390,31 @@ private:
         sprite.a = 1.0f;
 
         // Получаем ресурс из AssetManager по имени
-        const auto* resource = ctx()->assets->getResource("player_ship");
-        if (resource)
-        {
-            sprite.resourceId = resource->id;
-            sprite.textureId = resource->textureHandle;
-            sprite.u0 = resource->u0;
-            sprite.v0 = resource->v0;
-            sprite.u1 = resource->u1;
-            sprite.v1 = resource->v1;
-            sprite.width = resource->width;
-            sprite.height = resource->height;
-        }
+        // const auto* resource = ctx()->assets->getResource("player_ship");
+        // if (resource)
+        // {
+        //     sprite.resourceId = resource->id;
+        //     sprite.textureId = resource->textureHandle;
+        //     sprite.u0 = resource->u0;
+        //     sprite.v0 = resource->v0;
+        //     sprite.u1 = resource->u1;
+        //     sprite.v1 = resource->v1;
+        //     sprite.width = resource->width;
+        //     sprite.height = resource->height;
+        // }
 
         m_scene->registry().emplace<wingz::ecs::Sprite>(e, sprite);
+
+        // Анимация простоя (показывает кадры по очереди)
+        wingz::ecs::Animator idleAnim;
+        idleAnim.frames = {
+            { ctx()->assets->getResourceId("game:player_ship"), 0.5f },
+            { ctx()->assets->getResourceId("game:player_ship_2"), 0.5f },
+        };
+        idleAnim.looping = true;
+        idleAnim.playing = true;
+        m_scene->registry().emplace<wingz::ecs::Animator>(e, idleAnim);
+
         m_scene->registry().emplace<wingz::ecs::Tag>(
             e,
             (playerId == 0) ? "ServerPlayer" : "ClientPlayer"
